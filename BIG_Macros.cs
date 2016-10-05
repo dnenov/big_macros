@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Created by SharpDevelop.
  * User: dene
  * Date: 7/21/2016
@@ -344,7 +344,7 @@ namespace BIG_Macros
 			List<ElementId> survivor = new List<ElementId>();
 			List<ElementId> casualty = new List<ElementId>();
 			
-		    string filename = Path.Combine("C:/Users/dene/Documents/Working/warnings/KXC-A-001-A-BH-M3-BaseBuilding_dene@big.html");
+		    string filename = Path.Combine("S:/15504_KXG/00_BR-PEERSYNC/02_BIM/01-WIP/01.07-Temp/01.07.04-Warnings/KXC-A-001-A-BH-M3-BaseBuilding@big.html");
 		
 		    IList<ElementId> ids = new List<ElementId>();		    
 			
@@ -401,7 +401,7 @@ namespace BIG_Macros
 			List<ElementId> survivor = new List<ElementId>();
 			List<ElementId> casualty = new List<ElementId>();
 			
-		    string filename = Path.Combine("C:/Users/dene/Documents/roomtags/KXC-A-001-A-BH-M3-BaseBuilding_dene@big.html");
+		    string filename = Path.Combine("S:/15504_KXG/00_BR-PEERSYNC/02_BIM/01-WIP/01.07-Temp/01.07.04-Warnings/KXC-A-001-A-BH-M3-BaseBuilding@big.html");
 		    string message = "";
 		    
 		    IList<ElementId> ids = new List<ElementId>();		    
@@ -485,7 +485,7 @@ namespace BIG_Macros
 			List<ElementId> survivor = new List<ElementId>();
 			List<ElementId> casualty = new List<ElementId>();
 			
-		    string filename = Path.Combine("C:/Users/dene/Documents/Working/warnings/KXC-A-001-A-BH-M3-BaseBuilding_dene@big.html");
+		    string filename = Path.Combine("S:/15504_KXG/00_BR-PEERSYNC/02_BIM/01-WIP/01.07-Temp/01.07.04-Warnings/KXC-A-001-A-BH-M3-BaseBuilding@big.html");
 		    string message = "";
 		    
 		    IList<ElementId> ids = new List<ElementId>();		    
@@ -557,7 +557,7 @@ namespace BIG_Macros
 			List<ElementId> survivor = new List<ElementId>();
 			List<ElementId> casualty = new List<ElementId>();
 			
-		    string filename = Path.Combine("C:/Users/dene/Documents/Working/warnings/KXC-A-001-A-BH-M3-BaseBuilding_dene@big.html");
+		    string filename = Path.Combine("S:/15504_KXG/00_BR-PEERSYNC/02_BIM/01-WIP/01.07-Temp/01.07.04-Warnings/KXC-A-001-A-BH-M3-BaseBuilding@big.html");
 		    string message = "";
 		    
 		    IList<ElementId> ids = new List<ElementId>();		    
@@ -701,7 +701,7 @@ namespace BIG_Macros
 			List<ElementId> survivor = new List<ElementId>();
 			List<ElementId> casualty = new List<ElementId>();
 			
-		    string filename = Path.Combine("C:/Users/dene/Documents/Working/warnings/KXC-A-001-A-BH-M3-BaseBuilding_dene@big.html");
+		    string filename = Path.Combine("S:/15504_KXG/00_BR-PEERSYNC/02_BIM/01-WIP/01.07-Temp/01.07.04-Warnings/KXC-A-001-A-BH-M3-BaseBuilding@big.html");
 		    string message = "";
 		    
 		    IList<ElementId> ids = new List<ElementId>();		    
@@ -770,7 +770,8 @@ namespace BIG_Macros
 			
 			if (viewports.Count > 1)
 			{
-				Align(doc, viewports, "Vertical");
+				//Align(doc, viewports, "Vertical");
+				Distribute(doc, viewports, "Horizontal");
 			}		
 		}
 		
@@ -870,5 +871,94 @@ namespace BIG_Macros
 					break;
 			}		
 		}
+//		public void AttachedMiss()
+//		{
+//			Document doc = this.ActiveUIDocument.Document;
+//		    string filename = Path.Combine("S:/15504_KXG/00_BR-PEERSYNC/02_BIM/01-WIP/01.07-Temp/01.07.04-Warnings/KXC-A-001-A-BH-M3-BaseBuilding@big.html");
+//		    string message = "";
+//		    
+//		    //IList<ElementId> ids = new List<ElementId>();		    
+//		    Dictionary<Wall, Floor> elements = new Dictionary<Wall, Floor>();
+//		    
+//		    bool next = false;
+//		                
+//		    using (StreamReader sr = new StreamReader(filename))
+//		    {
+//		        string line = "";
+//		        
+//		        while ((line = sr.ReadLine()) != null)
+//		        {
+//		        	if (next)
+//		        	{
+//		        		next = false;
+//		        				        		
+//		        		string[] row = System.Text.RegularExpressions.Regex.Split(line,"id ");
+//						
+//			            string id1 = row[1].Split(' ')[0];	
+//			            string id2 = row[2].Split(' ')[0];	
+//			            			            			            
+//			            Floor floor = (doc.GetElement(new ElementId(int.Parse(id1)))) as Floor;
+//			            Wall wall = (doc.GetElement(new ElementId(int.Parse(id2)))) as Wall;
+//			                                            
+//                        if(wall == null || floor == null)
+//                        {
+//                        	continue;
+//		        			TaskDialog.Show("AttachedButMiss", "here");
+//                        }		
+//
+//                        elements.Add(wall, floor);
+//			            			            			                                                                  
+//			            message += String.Format("Element Id {0}{1}",id1, Environment.NewLine);
+//		        	}
+//		        	else
+//		        	{
+//		        		var firstIndex = line.IndexOf("Highlighted walls are attached to, but miss, the highlighted targets.");
+//		        	
+//			        	if (firstIndex != -1)
+//		        	    {	    	
+//							next = true;			        	    	
+//		        	    }	 
+//		        	}		        	      		            
+//		        }
+//		        TaskDialog.Show("AttachedButMiss", message);	
+//		        return;
+//		        
+//		        if (elements.Count == 0)
+//		        {
+//		        	message = "No such warning.";
+//		        	TaskDialog.Show("OverlappingWallLine", message);
+//		        	
+//		        	return;
+//		        }
+//		        
+//		        using (Transaction t = new Transaction(doc))
+//	            {		     
+//		        	
+//		        	FailureHandlingOptions options = t.GetFailureHandlingOptions();
+//	                FailureHandler failureHandler = new FailureHandler();
+//	                failureHandler = new FailureHandler();
+//	                options.SetFailuresPreprocessor(failureHandler);
+//	                options.SetClearAfterRollback(true);
+//	                t.SetFailureHandlingOptions(options);	
+//	                
+//		        	foreach(KeyValuePair<Wall, Floor> pair in elements)
+//		        	{	                
+//		                t.Start("IdenticalInstances_RemoveElements");	
+//		                
+//		                t.Commit();	
+//		                /*
+//		                if (failureHandler.ErrorMessage != "")
+//		                {	                	
+//			        		message += String.Format("Error: {0} with severity {1}. Item {2} not processed. {3}",
+//		                	                        failureHandler.ErrorMessage, failureHandler.ErrorSeverity, 
+//		                	                        id.ToString(), Environment.NewLine);
+//		                }	       
+//						*/ 	
+//		        	}
+//	            }		        
+//			}	    		
+//		    message += String.Format("{0}Overall {1} Walls were detached.", Environment.NewLine, elements.Count.ToString());
+//			TaskDialog.Show("OverlappingWallLine", message);			
+//		}
 	}
 }
