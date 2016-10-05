@@ -960,5 +960,73 @@ namespace BIG_Macros
 //		    message += String.Format("{0}Overall {1} Walls were detached.", Environment.NewLine, elements.Count.ToString());
 //			TaskDialog.Show("OverlappingWallLine", message);			
 //		}
+		public void DuplicateMarkValues()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			
+			List<Element> elements = new List<Element>();
+			
+		    string filename = Path.Combine("S:/15504_KXG/00_BR-PEERSYNC/02_BIM/01-WIP/01.07-Temp/01.07.04-Warnings/KXC-A-001-A-BH-M3-BaseBuilding@big.html");
+		    string message = "";
+		    
+		    IList<ElementId> ids = new List<ElementId>();		    
+		    
+		    bool next = false;
+		                
+		    using (StreamReader sr = new StreamReader(filename))
+		    {
+		        string line = "";
+		        
+		        while ((line = sr.ReadLine()) != null)
+		        {
+		        	if (next)
+		        	{
+		        		next = false;
+		        				        		
+		        		string[] row = System.Text.RegularExpressions.Regex.Split(line,"id ");
+						
+			            string id = "";		
+			            		
+				        for( int i = 1; i < row.Length; i++)
+				        {
+				        	id = row[i].Split(' ')[0];
+				        	ids.Add((new ElementId(int.Parse(id))));                                                     
+			            	message += String.Format("Element Id {0}{1}",id, Environment.NewLine);
+				        }			            			            			            			             
+		        	}
+		        	else
+		        	{
+		        		var firstIndex = line.IndexOf("Elements have duplicate 'Mark' values.");
+		        	
+			        	if (firstIndex != -1)
+		        	    {	    	
+							next = true;		        	    	
+		        	    }	 
+		        	}		        	      		            
+		        }
+		        if (ids.Count == 0)
+		        {
+		        	message = "No such warning.";
+		        	TaskDialog.Show("AreaLines", message);
+		        	
+		        	return;
+		        }
+		        
+		        message = "";
+		        using (Transaction t = new Transaction(doc))
+	            {		                
+	                t.Start("DuplicateMarkValues");	
+	                foreach(ElementId id in ids)
+	                {
+	                	doc.GetElement(id).LookupParameter("Comments").Set(doc.GetElement(id).LookupParameter("Mark").AsString());
+	                	doc.GetElement(id).LookupParameter("Mark").Set("");
+	                }
+	                t.Commit();	
+	            }		        
+			}	    		
+		    message += String.Format("{0}The mark values of overall {1} Elements changed.", Environment.NewLine, ids.Count.ToString());
+			TaskDialog.Show("DeleteAreaLines", message);
+			
+		}
 	}
 }
