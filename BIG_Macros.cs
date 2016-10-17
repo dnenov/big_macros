@@ -8,9 +8,10 @@
  */
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Linq;
-
+using System.Text;
 using Autodesk.Revit.ApplicationServices;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Architecture;
@@ -48,6 +49,29 @@ namespace BIG_Macros
 				if(element.Category.Name == "Lines" ||
 				  element.Category.Name == "<Room Separation>" ||
 				 element.Category.Name == "<Area Boundary>")
+				{
+					return true;
+				}
+				return false;
+			}
+			
+			public bool AllowReference(Reference refer, XYZ point)
+			{
+				return true;
+			}
+		}
+		
+		public class AreaBoundarySelectionFilter : ISelectionFilter
+		{
+			Document doc = null;
+			public AreaBoundarySelectionFilter(Document document)
+			{
+				doc = document;
+			}
+			
+			public bool AllowElement(Element element)
+			{
+				if(element.Category.Name == "<Area Boundary>")
 				{
 					return true;
 				}
@@ -134,8 +158,7 @@ namespace BIG_Macros
 					}
 				}
 			}
-			
-			
+						
 			itterate(detail_lines, survivor, casualty, doc);
 			itterate(model_lines, survivor, casualty, doc);
 			itterate(room_lines, survivor, casualty, doc);
@@ -694,6 +717,128 @@ namespace BIG_Macros
 				return FailureProcessingResult.Continue;
 			}
 		}		
+		public void FamilyTypeCreate()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			if (!doc.IsFamilyDocument) 
+			{
+				TaskDialog.Show("Error", "Only execute in family document");
+				return;
+			}
+			
+			FamilyManager famanager = doc.FamilyManager;
+			FamilyType famtype = famanager.CurrentType;
+			if (famtype == null)
+			{
+				using(Transaction t = new Transaction(doc, "Create Family Type"))
+				{
+					t.Start();
+					famanager.NewType("Default");
+					t.Commit();
+				}
+				
+				using(Transaction t = new Transaction(doc, "Delete Family Type"))
+				{
+					t.Start();
+					famanager.DeleteCurrentType();
+					t.Commit();
+				}
+				
+				return;					
+			}
+			else
+			{
+				TaskDialog.Show("Error", famtype.Name + ":" + famtype.ToString());
+			}
+		}
+		public void FamilyCount()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			
+			FilteredElementCollector col = new FilteredElementCollector(doc);
+			
+			List<Element> elements = col
+				.OfClass(typeof(Family))
+				.ToList();
+			
+			col = new FilteredElementCollector(doc);
+			
+			List<FamilyInstance> instances = col
+				.OfClass(typeof(FamilyInstance))
+				.WhereElementIsNotElementType()
+				.Cast<FamilyInstance>()
+				.ToList();
+						
+			DataSet dataSet = new DataSet(String.Format("{0} family usage.", doc.Title));
+			DataTable table = new DataTable(String.Format("Family usage {0}", DateTime.Today));
+			table.Columns.Add("Family Name");
+			table.Columns.Add("File Size");
+			table.Columns.Add("Number of times used");
+			table.Columns.Add("Element Id");
+			
+			
+			string s = "";
+			
+			s += String.Format("Total number of families: {0}{1}{2}", elements.Count, Environment.NewLine, Environment.NewLine);
+			
+			long totalSize = 0;
+			
+			foreach(var family in elements)
+			{	
+				string count = instances.Where(x => x.Symbol.FamilyName.Equals(family.Name)).ToList().Count.ToString();	
+				long size = familySize(family as Family);		
+				totalSize += size;
+				
+				//string count = "";
+				s += String.Format("{0} : {1} - used {2} times {3}", family.Name, convertSize(size), count, Environment.NewLine);
+				table.Rows.Add(family.Name, convertSize(size), count, family.Id);
+			}
+			s += String.Format("{0}{0}Total size used {1}",Environment.NewLine, convertSize(totalSize));
+			TaskDialog.Show("Number of Families", s);
+			
+			var builder = new StringBuilder();
+			
+			foreach(DataRow row in table.Rows)
+			{
+				builder.AppendLine(String.Join("\t",row.ItemArray));				
+			}
+			var file = new FileStream("C:/Users/dene/Documents/Working/macros/family size/report.txt",FileMode.Create);
+			var writer = new StreamWriter(file);
+			writer.Write(builder.ToString());
+			writer.Flush();
+			writer.Close();
+			return;
+		}
+		private string convertSize(long length)
+		{
+			if(length == -1) return "Family is not editable";
+			string[] sizes = { "B", "KB", "MB", "GB" };
+			int order = 0;
+			while (length >= 1024 && ++order < sizes.Length) {
+			    length = length/1024;
+			}
+			string result = String.Format("{0:0.##} {1}", length, sizes[order]);
+			return result;				
+		}
+		private long familySize(Family family)
+		{
+			try
+			{				
+				Document doc = this.ActiveUIDocument.Document.EditFamily(family);
+				string str = Path.Combine(Path.GetTempPath(), doc.Title);
+				SaveAsOptions saveAsOptions = new SaveAsOptions();
+				saveAsOptions.OverwriteExistingFile = true;
+				doc.SaveAs(str, saveAsOptions);
+				long length = new FileInfo(str).Length;
+				
+				File.Delete(str);
+				return length;
+			}
+			catch (Exception ex)
+			{
+				return -1;
+			}
+		}
 		public void DeleteAreaLines()
 		{			
 			Document doc = this.ActiveUIDocument.Document;
@@ -774,7 +919,58 @@ namespace BIG_Macros
 				Distribute(doc, viewports, "Horizontal");
 			}		
 		}
-		
+		public void ImportedDWG()
+        {
+            Document doc = ActiveUIDocument.Document;
+            
+            FilteredElementCollector col = new FilteredElementCollector(doc)
+                .OfClass(typeof(ImportInstance));
+            
+            IList<ImportInstance> elements = col
+                .Cast<ImportInstance>()
+                .Where(x => !x.IsLinked)
+                .ToList();
+            
+            TaskDialog.Show("NumberImports", String.Format("There are {0} number of imported files", 
+                                                           elements.Count().ToString()));
+            string s = "";
+            
+            foreach(ImportInstance instance in elements)
+            {
+                s += instance.LookupParameter("Name").AsString() + " : " + doc.GetElement(instance.OwnerViewId).Name.ToString() + Environment.NewLine;                
+            }
+            TaskDialog.Show("NumberImports", String.Format("There are {0}{1}", Environment.NewLine,
+                                                           s));
+            
+            return;
+        }        
+        public void PurgeImportedLines()
+        {
+            Document doc = ActiveUIDocument.Document;
+            
+            string m = "";
+            
+            FilteredElementCollector col = new FilteredElementCollector(doc)
+                .OfClass(typeof(LinePatternElement));
+            
+            List<ElementId> lpeIds = col.ToElementIds().Where(x => doc.GetElement(x).Name.Contains("IMPORT")).ToList();
+            List<LinePatternElement> linePatterns = col.Cast<LinePatternElement>().Where(x => x.Name.Contains("IMPORT")).ToList();
+            
+            using (Transaction t = new Transaction(doc, "Purge imported line patterns"))
+            {
+                t.Start();
+                foreach(LinePatternElement lpe in linePatterns)
+                {
+                    m += lpe.Name + Environment.NewLine;
+                }
+                doc.Delete(lpeIds);
+                t.Commit();
+            }
+            
+            m += Environment.NewLine + String.Format(("A total of {0} imported line patterns have been removed from this project"), linePatterns.Count.ToString());
+            TaskDialog.Show("PurgeImportedLines", m);
+            return;            
+        }
 		private void Distribute(Document doc, IList<Reference> viewports, string direction)
 		{		
 			Viewport [] viewportArray = null;			
@@ -1025,8 +1221,34 @@ namespace BIG_Macros
 	            }		        
 			}	    		
 		    message += String.Format("{0}The mark values of overall {1} Elements changed.", Environment.NewLine, ids.Count.ToString());
-			TaskDialog.Show("DeleteAreaLines", message);
+			TaskDialog.Show("DeleteAreaLines", message);			
+		}
+		public void ElementToWorkset()
+		{
+			Document doc = ActiveUIDocument.Document;
+			string workName = "X-Admin";
 			
+			FilteredElementCollector collector = new FilteredElementCollector(doc);
+			FilteredWorksetCollector workCollector = new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset);
+			
+			Workset workset = workCollector.Single(x => x.Name.Equals(workName));
+			IList<Element> elements = collector.OfCategory(BuiltInCategory.OST_AreaSchemeLines).ToElements();
+			int converted = 0;
+			using(Transaction t = new Transaction(doc,"ElementToWorkset"))
+			{
+				t.Start();
+				foreach(Element el in elements)
+				{
+					if(el.WorksetId.IntegerValue != workset.Id.IntegerValue) //only convert if they are not in that workset
+					{
+						el.get_Parameter(BuiltInParameter.ELEM_PARTITION_PARAM).Set(workset.Id.IntegerValue);	
+						converted++;						
+					}
+				}
+				t.Commit();
+			}
+			
+			TaskDialog.Show("AreaBoundaries", String.Format("{0} number of Area Boundary Lines were assigned to {1} workset", converted.ToString(), workName));
 		}
 	}
 }
