@@ -12,6 +12,7 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Windows.Forms;
 using Autodesk.Revit.ApplicationServices;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Architecture;
@@ -288,8 +289,7 @@ namespace BIG_Macros
 	
 		private Tuple<ElementId, ElementId> OverlapId(ElementId l1, ElementId l2, Document doc)
 		{						
-			double precision = 0.01;
-			
+			double precision = 0.01;			
 						
 			Curve c1 = (doc.GetElement(l1).Location as LocationCurve).Curve as Curve;
 			Curve c2 = (doc.GetElement(l2).Location as LocationCurve).Curve as Curve;
@@ -367,7 +367,17 @@ namespace BIG_Macros
 			List<ElementId> survivor = new List<ElementId>();
 			List<ElementId> casualty = new List<ElementId>();
 			
-		    string filename = Path.Combine("S:/15504_KXG/00_BR-PEERSYNC/02_BIM/01-WIP/01.07-Temp/01.07.04-Warnings/KXC-A-001-A-BH-M3-BaseBuilding@big.html");
+		    string filename = "";		    
+		    
+			using(var ofd = new OpenFileDialog())
+			{
+			    DialogResult result = ofd.ShowDialog();
+			
+			    if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(ofd.FileName))
+			    {
+			        filename = ofd.FileName;
+			    }
+			}
 		
 		    IList<ElementId> ids = new List<ElementId>();		    
 			
@@ -417,14 +427,25 @@ namespace BIG_Macros
 		/// <summary>
 		/// Re-centers room tags to their hosts
 		/// </summary>
-		public void RoomTags()
+		public void RoomAreaTags()
 		{
 			Document doc = this.ActiveUIDocument.Document;
 			
 			List<ElementId> survivor = new List<ElementId>();
 			List<ElementId> casualty = new List<ElementId>();
 			
-		    string filename = Path.Combine("S:/15504_KXG/00_BR-PEERSYNC/02_BIM/01-WIP/01.07-Temp/01.07.04-Warnings/KXC-A-001-A-BH-M3-BaseBuilding@big.html");
+		    string filename = "";
+		    
+			using(var ofd = new OpenFileDialog())
+			{
+			    DialogResult result = ofd.ShowDialog();
+			
+			    if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(ofd.FileName))
+			    {
+			        filename = ofd.FileName;
+			    }
+			}
+			
 		    string message = "";
 		    
 		    IList<ElementId> ids = new List<ElementId>();		    
@@ -432,6 +453,7 @@ namespace BIG_Macros
 		    bool next = false;
 		    
 		    List<Tuple<RoomTag, XYZ>> rtSet = new List<Tuple<RoomTag, XYZ>>();
+		    List<Tuple<AreaTag, XYZ>> atSet = new List<Tuple<AreaTag, XYZ>>();
             
 		    using (StreamReader sr = new StreamReader(filename))
 		    {
@@ -450,50 +472,99 @@ namespace BIG_Macros
 			            //We found the faulty room tag!
 			            Element element = doc.GetElement(new ElementId(int.Parse(id)));	
 						
-			            RoomTag roomTag = element as RoomTag;			            
-			            
-			            try
-			            {	
-			            	XYZ translation = (roomTag.Room.Location as LocationPoint).Point - (roomTag.Location as LocationPoint).Point;	
-			            	rtSet.Add(new Tuple<RoomTag, XYZ>(roomTag, translation));
-		            		message += String.Format("RoomTag {0} was moved to its Room Host.{1}", id, Environment.NewLine);
+			            RoomTag roomTag = element as RoomTag;	
+			            if(roomTag != null)
+			            {			            
+				            try
+				            {	
+				            	XYZ translation = (roomTag.Room.Location as LocationPoint).Point - (roomTag.Location as LocationPoint).Point;	
+				            	rtSet.Add(new Tuple<RoomTag, XYZ>(roomTag, translation));
+			            		message += String.Format("RoomTag {0} was moved to its Room Host.{1}", id, Environment.NewLine);
+				            }
+				            catch(Exception ex)
+				            {
+				            	throw ex;
+				            }			            	
 			            }
-			            catch(Exception ex)
-			            {
-			            	throw ex;
+			            
+			            AreaTag areaTag = element as AreaTag;
+			            if(areaTag != null)
+			            {		            
+				            try
+				            {	
+				            	XYZ translation = (areaTag.Area.Location as LocationPoint).Point - (areaTag.Location as LocationPoint).Point;	
+				            	atSet.Add(new Tuple<AreaTag, XYZ>(areaTag, translation));
+			            		message += String.Format("AreaTag {0} was moved to its Room Host.{1}", id, Environment.NewLine);
+				            }
+				            catch(Exception ex)
+				            {
+				            	throw ex;
+				            }				            	
 			            }
 		        	}
 		        	else
 		        	{
-		        		var firstIndex = line.IndexOf("Room Tag");
-		        	
-			        	if (firstIndex != line.LastIndexOf("Room Tag") && firstIndex != -1)
+		        		var firstIndexRoomTag = line.IndexOf("Room Tag");
+		        	    var firstIndexAreaTag = line.IndexOf("Area Tag");
+		        	    
+			        	if (firstIndexRoomTag != line.LastIndexOf("Room Tag") && firstIndexRoomTag != -1)
 		        	    {	     		
 							next = true;		        	    	
 		        	    }	 
+			        	else if(firstIndexAreaTag != line.LastIndexOf("Room Tag") && firstIndexAreaTag != -1)
+			        	{
+			        		next = true;
+			        	}
 		        	}		        	      		            
 		        }
-		        using (Transaction t = new Transaction(doc,"RoomTag_AssignLeader"))
-	            {
-	                t.Start();
-	                foreach(Tuple<RoomTag, XYZ> tuple in rtSet)
-	                {
-	                	tuple.Item1.HasLeader = true;
-        				//tuple.Item1.Location.Move(tuple.Item2);	                	
-	                }				                
-	                t.Commit();
-	            }
-		        using (Transaction t = new Transaction(doc,"RoomTag_RemoveLeader"))
-	            {
-	                t.Start();
-	                foreach(Tuple<RoomTag, XYZ> tuple in rtSet)
-	                {
-	                	tuple.Item1.HasLeader = false;
-        				//tuple.Item1.Location.Move(tuple.Item2);	                	
-	                }				                
-	                t.Commit();
-	            }
-		        message += String.Format("{0}{1}Overall {2} Room Tags moved.", Environment.NewLine, Environment.NewLine, rtSet.Count);
+		        if(rtSet.Count > 0)
+		        {
+			        using (Transaction t = new Transaction(doc,"RoomTag_AssignLeader"))
+		            {
+		                t.Start();
+		                foreach(Tuple<RoomTag, XYZ> tuple in rtSet)
+		                {
+		                	tuple.Item1.HasLeader = true;
+	        				//tuple.Item1.Location.Move(tuple.Item2);	                	
+		                }				                
+		                t.Commit();
+		            }
+			        using (Transaction t = new Transaction(doc,"RoomTag_RemoveLeader"))
+		            {
+		                t.Start();
+		                foreach(Tuple<RoomTag, XYZ> tuple in rtSet)
+		                {
+		                	tuple.Item1.HasLeader = false;
+	        				//tuple.Item1.Location.Move(tuple.Item2);	                	
+		                }				                
+		                t.Commit();
+		            }		        	
+		        }
+		        if(atSet.Count > 0)
+		        {
+			        using (Transaction t = new Transaction(doc,"AreaTag_AssignLeader"))
+		            {
+		                t.Start();
+		                foreach(Tuple<AreaTag, XYZ> tuple in atSet)
+		                {
+		                	tuple.Item1.HasLeader = true;
+	        				//tuple.Item1.Location.Move(tuple.Item2);	                	
+		                }				                
+		                t.Commit();
+		            }
+			        using (Transaction t = new Transaction(doc,"AreaTag_RemoveLeader"))
+		            {
+		                t.Start();
+		                foreach(Tuple<AreaTag, XYZ> tuple in atSet)
+		                {
+		                	tuple.Item1.HasLeader = false;
+	        				//tuple.Item1.Location.Move(tuple.Item2);	                	
+		                }				                
+		                t.Commit();
+		            }			        	
+		        }
+		        
+		        message += String.Format("{0}{1}Overall {2} Room Tags and {3} Area Tags have moved.", Environment.NewLine, Environment.NewLine, rtSet.Count, atSet.Count);
 			}	    		
 			
 			TaskDialog.Show("RoomTag", message);
@@ -504,11 +575,23 @@ namespace BIG_Macros
 		public void IdenticalInstances()
 		{
 			Document doc = this.ActiveUIDocument.Document;
+			Selection selection = this.ActiveUIDocument.Selection;
 			
 			List<ElementId> survivor = new List<ElementId>();
 			List<ElementId> casualty = new List<ElementId>();
 			
-		    string filename = Path.Combine("S:/15504_KXG/00_BR-PEERSYNC/02_BIM/01-WIP/01.07-Temp/01.07.04-Warnings/KXC-A-001-A-BH-M3-BaseBuilding@big.html");
+		    string filename = "";
+		    
+			using(var ofd = new OpenFileDialog())
+			{
+			    DialogResult result = ofd.ShowDialog();
+			
+			    if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(ofd.FileName))
+			    {
+			        filename = ofd.FileName;
+			    }
+			}
+			
 		    string message = "";
 		    
 		    IList<ElementId> ids = new List<ElementId>();		    
@@ -520,7 +603,7 @@ namespace BIG_Macros
 		        string line = "";
 		        
 		        while ((line = sr.ReadLine()) != null)
-		        {
+		        {		        	
 		        	if (next)
 		        	{
 		        		next = false;
@@ -552,19 +635,38 @@ namespace BIG_Macros
 		        	
 		        	return;
 		        }
-		        using (Transaction t = new Transaction(doc,"IdenticalInstances_RemoveElements"))
-	            {		     
-	                t.Start();	
-	                doc.Delete(casualty);
-	                t.Commit();
-	                if (t.GetStatus() == TransactionStatus.Committed)
-	                {	                	
-		        		message += String.Format("{0}{1}Overall {2} Elements Deleted.", Environment.NewLine, Environment.NewLine, casualty.Count);
-	                }
-	                else{
-	                	message = "Transaction failed";
-	                }
-	            }		        
+		        
+		        FilteredElementCollector col = new FilteredElementCollector(doc, doc.ActiveView.Id).WhereElementIsNotElementType();
+            	ICollection<ElementId> allAlements = col.ToElementIds();
+            	
+            	//TaskDialog.Show("IdenticalInstances", casualty.Count.ToString());
+            	casualty.RemoveAll(item => allAlements.Contains(item));
+            	//TaskDialog.Show("IdenticalInstances", casualty.Count.ToString());            	
+            	
+				using (Transaction t = new Transaction(doc,"IdenticalInstances_RemoveElements"))
+				{		
+					FailureHandlingOptions foptions = t.GetFailureHandlingOptions();
+				    FailureHandler fhandler = new FailureHandler();
+				    foptions.SetFailuresPreprocessor(fhandler);
+				    foptions.SetClearAfterRollback(true);
+				    t.SetFailureHandlingOptions(foptions);
+				    
+				    
+				    t.Start();	
+				    
+				    //selection.SetElementIds(survivor);
+				    doc.Delete(casualty);
+				    t.Commit();
+				    	    
+				    if (t.GetStatus() == TransactionStatus.Committed)
+				    {	                	
+						message += String.Format("{0}{1}Overall {2} Elements Deleted.", Environment.NewLine, Environment.NewLine, casualty.Count);
+				    }
+				    else
+				    {
+				    	message = "Transaction failed";
+				    }
+				}	       
 			}	    		
 			
 			TaskDialog.Show("IdenticalInstances", message);
@@ -580,7 +682,18 @@ namespace BIG_Macros
 			List<ElementId> survivor = new List<ElementId>();
 			List<ElementId> casualty = new List<ElementId>();
 			
-		    string filename = Path.Combine("S:/15504_KXG/00_BR-PEERSYNC/02_BIM/01-WIP/01.07-Temp/01.07.04-Warnings/KXC-A-001-A-BH-M3-BaseBuilding@big.html");
+		    string filename = "";		    
+		    
+			using(var ofd = new OpenFileDialog())
+			{
+			    DialogResult result = ofd.ShowDialog();
+			
+			    if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(ofd.FileName))
+			    {
+			        filename = ofd.FileName;
+			    }
+			}
+			
 		    string message = "";
 		    
 		    IList<ElementId> ids = new List<ElementId>();		    
@@ -648,7 +761,7 @@ namespace BIG_Macros
 	                t.SetFailureHandlingOptions(options);	
 	                
 		        	foreach(ElementId id in casualty)
-		        	{	                
+		        	{		
 		                t.Start("IdenticalInstances_RemoveElements");	
 		                doc.Delete(casualty);
 		                t.Commit();	
@@ -683,9 +796,27 @@ namespace BIG_Macros
 			{
 				IList<FailureMessageAccessor> failureMessages = failuresAccessor.GetFailureMessages();
 				
-				if (failureMessages.Count > 0)
-				{
-					return FailureProcessingResult.ProceedWithRollBack;
+				if (failureMessages.Count == 0)
+				{	
+					return FailureProcessingResult.Continue;
+				}				
+				else
+				{	
+					foreach(FailureMessageAccessor fma in failureMessages)
+					{
+						FailureSeverity fsav = fma.GetSeverity();
+						
+						if(fsav == FailureSeverity.Warning)
+						{
+							failuresAccessor.DeleteWarning(fma);
+						}
+						else
+						{
+							failuresAccessor.ResolveFailure(fma);
+							return FailureProcessingResult.ProceedWithCommit;
+						}
+					}
+					return FailureProcessingResult.Continue;
 				}
 				/*
 				foreach( FailureMessageAccessor failureMessageAccessor in failureMessages)
@@ -714,7 +845,6 @@ namespace BIG_Macros
 					{						
 					}
 					*/
-				return FailureProcessingResult.Continue;
 			}
 		}		
 		public void FamilyTypeCreate()
@@ -846,7 +976,18 @@ namespace BIG_Macros
 			List<ElementId> survivor = new List<ElementId>();
 			List<ElementId> casualty = new List<ElementId>();
 			
-		    string filename = Path.Combine("S:/15504_KXG/00_BR-PEERSYNC/02_BIM/01-WIP/01.07-Temp/01.07.04-Warnings/KXC-A-001-A-BH-M3-BaseBuilding@big.html");
+		    string filename = "";
+		    		    
+			using(var ofd = new OpenFileDialog())
+			{
+			    DialogResult result = ofd.ShowDialog();
+			
+			    if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(ofd.FileName))
+			    {
+			        filename = ofd.FileName;
+			    }
+			}
+			
 		    string message = "";
 		    
 		    IList<ElementId> ids = new List<ElementId>();		    
@@ -1162,7 +1303,18 @@ namespace BIG_Macros
 			
 			List<Element> elements = new List<Element>();
 			
-		    string filename = Path.Combine("S:/15504_KXG/00_BR-PEERSYNC/02_BIM/01-WIP/01.07-Temp/01.07.04-Warnings/KXC-A-001-A-BH-M3-BaseBuilding@big.html");
+		    string filename = "";		
+			
+			using(var ofd = new OpenFileDialog())
+			{
+			    DialogResult result = ofd.ShowDialog();
+			
+			    if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(ofd.FileName))
+			    {
+			        filename = ofd.FileName;
+			    }
+			}
+			
 		    string message = "";
 		    
 		    IList<ElementId> ids = new List<ElementId>();		    
@@ -1224,15 +1376,21 @@ namespace BIG_Macros
 			TaskDialog.Show("DeleteAreaLines", message);			
 		}
 		public void ElementToWorkset()
-		{
+		{			
+			UIDocument uidoc = this.ActiveUIDocument;
 			Document doc = ActiveUIDocument.Document;
 			string workName = "X-Admin";
+			
+			LineSelectionFilter filter = new ThisApplication.LineSelectionFilter(doc);
+			IList<Reference> references = uidoc.Selection.PickObjects(ObjectType.Element, filter, "Select multiple lines");
 			
 			FilteredElementCollector collector = new FilteredElementCollector(doc);
 			FilteredWorksetCollector workCollector = new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset);
 			
 			Workset workset = workCollector.Single(x => x.Name.Equals(workName));
-			IList<Element> elements = collector.OfCategory(BuiltInCategory.OST_AreaSchemeLines).ToElements();
+			//IList<Element> elements = collector.OfCategory(BuiltInCategory.OST_AreaSchemeLines).ToElements();
+			//IList<Element> elements = collector.OfCategory(BuiltInCategory.OST_Areas).ToElements();
+			IList<Element> elements = references.Select(x => doc.GetElement(x)).ToList();
 			int converted = 0;
 			using(Transaction t = new Transaction(doc,"ElementToWorkset"))
 			{
@@ -1249,6 +1407,330 @@ namespace BIG_Macros
 			}
 			
 			TaskDialog.Show("AreaBoundaries", String.Format("{0} number of Area Boundary Lines were assigned to {1} workset", converted.ToString(), workName));
+		}
+		public void Assign()
+		{
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = ActiveUIDocument.Document;
+			
+			List<Element> elements = new List<Element>();
+			ICollection<ElementId> selection = uidoc.Selection.GetElementIds();
+			
+			foreach(ElementId id in selection)
+			{
+				elements.Add(doc.GetElement(id));
+			}
+			
+			FilteredWorksetCollector worksetCollector = new FilteredWorksetCollector(doc);
+            List<Workset> worksets = worksetCollector.OfKind(WorksetKind.UserWorkset).ToList();
+            
+			WorksetId worksetId = null;
+			
+            foreach (Workset workset in worksets)
+            {
+            	if(workset.Name.Equals("X-Admin"))
+            	{
+            		worksetId = workset.Id;
+            		break;
+            	}
+            }
+            TaskDialog.Show("Bzzt", String.Format("Element count: {0} {1}Workset: {2}", elements.Count.ToString(), Environment.NewLine, worksetId.IntegerValue.ToString()));
+            
+			
+			using (Transaction t = new Transaction(doc, "Assign"))
+            {
+                FailureHandlingOptions foptions = t.GetFailureHandlingOptions();
+                FailureHandler fhandler = new FailureHandler();
+                foptions.SetFailuresPreprocessor(fhandler);
+                foptions.SetClearAfterRollback(true);
+                t.SetFailureHandlingOptions(foptions);
+
+                t.Start();
+
+                foreach (Element el in elements)
+                {
+                    if (el.WorksetId.IntegerValue != worksetId.IntegerValue) //only convert if they are not in that workset
+                    {
+                        if(el.get_Parameter(BuiltInParameter.ELEM_PARTITION_PARAM).IsReadOnly)
+                        {
+                            //failed++;
+                            continue;
+                        }
+                        try
+                        {
+                            el.get_Parameter(BuiltInParameter.ELEM_PARTITION_PARAM).Set(worksetId.IntegerValue);
+                            //converted++;
+                        }
+                        catch
+                        {
+
+                        }
+                    }
+                }
+                t.Commit();
+            }
+		}
+		public void Select()
+		{
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = ActiveUIDocument.Document;
+			
+			Categories categories = doc.Settings.Categories;
+			Category cat = null;
+			
+			foreach (Category c in categories)
+			{
+				if(c.Name.Equals("Lines"))
+				{
+					cat = c;
+					break;
+				}				   
+			}
+			
+			List<ElementId> elements = new List<ElementId>();
+            List<Category> subCat = getSubCategories(doc, cat);
+
+            if (subCat != null)
+            {
+                foreach (Category subCategory in subCat)
+                {
+                    //The recursion
+                    var subElem = recursiveElements(doc, subCategory);
+                    elements.AddRange(subElem);
+                }
+            }
+
+            FilteredElementCollector collector = new FilteredElementCollector(doc);
+            List<ElementId> thisElements = collector.OfCategoryId(cat.Id)
+                .WhereElementIsNotElementType()
+                .ToElementIds()
+                .ToList();
+            elements.AddRange(thisElements);
+			
+            uidoc.Selection.SetElementIds(elements);   
+		}
+		internal List<Category> getSubCategories(Document doc, Category cat)
+        {
+            List<Category> listCat = null;
+            var categories = cat.SubCategories;
+            if(!categories.IsEmpty)
+            {
+                listCat = new List<Category>();
+                foreach (Category subCat in categories)
+                {
+                    listCat.Add(subCat);
+                }
+            }
+            return listCat;
+        }
+		
+		internal List<ElementId> recursiveElements(Document doc, Category cat)
+        {
+            List<ElementId> elements = new List<ElementId>();
+            List<Category> subCat = getSubCategories(doc, cat);
+
+            if (subCat != null)
+            {
+                foreach (Category subCategory in subCat)
+                {
+                    //The recursion
+                    var subElem = recursiveElements(doc, subCategory);
+                    elements.AddRange(subElem);
+                }
+            }
+
+            FilteredElementCollector collector = new FilteredElementCollector(doc);
+            List<ElementId> thisElements = collector.OfCategoryId(cat.Id)
+                .WhereElementIsNotElementType()
+                .ToElementIds()
+                .ToList();
+            elements.AddRange(thisElements);
+
+            return elements;
+        }
+		public void DeleteSheets()
+		{
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = ActiveUIDocument.Document;
+			
+			FilteredElementCollector collector = new FilteredElementCollector(doc);
+			
+			List<ElementId> ids = collector.OfClass(typeof(ViewSheet)).ToElementIds().ToList();
+			
+			using(Transaction t = new Transaction(doc, "Delete All Sheets"))
+			{
+				t.Start();
+				doc.Delete(ids);
+				t.Commit();
+			}
+		}
+		public void ChangeTypeParamter()
+		{
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = ActiveUIDocument.Document;
+			
+			FilteredElementCollector collector = new FilteredElementCollector(doc);
+			
+			ICollection<Element> panels = collector.OfClass(typeof(FamilyInstance)).OfCategory(BuiltInCategory.OST_GenericModel).ToElements();
+			List<Element> sorted = new List<Element>();
+			string s = "";
+			string n = "";
+			string typeName = "";
+			string prefix = "Panel Type {0}";
+			string message = "";
+			
+			foreach(Element panel in panels)
+			{
+				if(null != panel.GetTypeId())
+				{
+					Element panelType = doc.GetElement(panel.GetTypeId());
+					if(panelType.LookupParameter("Type Mark").AsString() != null &&  panelType.LookupParameter("Type Mark").AsString().Contains("GL"))
+					{
+						if(panel.IsValidObject && panel.LookupParameter("Glass Length") != null && panel.LookupParameter("Glass Heigth") != null)
+						{
+							sorted.Add(panel);
+						}
+					}
+				}
+			}
+			
+			sorted = sorted.OrderBy(x => x.LookupParameter("Glass Length").AsValueString()).
+				ThenBy(x => x.LookupParameter("Glass Heigth").AsValueString()).ToList();
+				
+			int c = 0;
+			
+			using (Transaction t = new Transaction(doc, "Rename"))
+			{
+				t.Start();
+				foreach(Element panel in sorted)
+				{				
+					s = string.Format("{0}-{1}", 
+					                   panel.LookupParameter("Glass Length").AsValueString(),
+					                   panel.LookupParameter("Glass Heigth").AsValueString() + Environment.NewLine);
+					if(s != n)
+					{
+						n = s;
+						c++;
+						typeName = string.Format(prefix, c.ToString());
+						message += typeName + Environment.NewLine;
+					}
+					
+					SetTypeParameter(doc, panel.Id, "Comments", typeName);
+				}
+				t.Commit();
+			}
+			/*
+			foreach(Element pane in panes)
+			{
+				s += pane.LookupParameter("Glass Length").AsDouble().ToString() + Environment.NewLine;
+				
+			}
+			*/
+			TaskDialog.Show("ChangeTypeParamter", message);
+			
+		}
+		private void SetTypeParameter(Document doc, ElementId id, string param, string name)
+		{
+			doc.GetElement(id).LookupParameter(param).Set(name);
+		}
+		public void OpenDetachSave()
+		{
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = ActiveUIDocument.Document;			
+				
+			string file = "";			
+			
+			using(var ofd = new OpenFileDialog())
+			{
+			    DialogResult result = ofd.ShowDialog();
+			
+			    if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(ofd.FileName))
+			    {
+			        file = ofd.FileName;
+			    }
+			}
+			
+			ModelPath path = ModelPathUtils.ConvertUserVisiblePathToModelPath(file);
+				
+			Document saveDoc = OpenDetached(this.Application, path);
+			
+			//ShowInfoOnOpenedWorksharedDocument( saveDoc );
+			
+			String serverPathRoot = this.Application
+		      .GetRevitServerNetworkHosts().First();
+		 	
+			 
+		    ModelPath modelPath = new ServerPath(
+		      serverPathRoot,
+		      "\\KGX1\\Consultants\\" + Path.GetFileName(file));
+			
+			SaveAsOptions options = new SaveAsOptions();
+            options.OverwriteExistingFile = true;
+            
+		    WorksharingSaveAsOptions wsOptions
+		      = new WorksharingSaveAsOptions();
+		    
+		    wsOptions.SaveAsCentral = true;
+		    options.SetWorksharingOptions( wsOptions );
+		    saveDoc.SaveAs( modelPath, options );
+		 
+		    ShowInfoOnOpenedWorksharedDocument( saveDoc );
+		 
+		    saveDoc.Close( false );			 
+		}
+		
+		static Document OpenDetached(
+	    Autodesk.Revit.ApplicationServices.Application app,
+		ModelPath modelPath )
+		{
+			OpenOptions options = new OpenOptions();
+						
+			options.DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets;
+			
+			return app.OpenDocumentFile(modelPath,options);
+		}
+		
+		/// <summary>
+		/// Show popup with info about worksets 
+		/// and worksharing status
+		/// </summary>
+		static void ShowInfoOnOpenedWorksharedDocument(
+		Document doc )
+		{
+		String documentName = doc.Title;
+		bool isWorkshared = doc.IsWorkshared;
+		
+		FilteredWorksetCollector fwc
+		  = new FilteredWorksetCollector( doc );
+		
+		fwc.OfKind( WorksetKind.UserWorkset );
+		
+		int wsCount = fwc.Count<Workset>();
+		
+		TaskDialog td = new TaskDialog(
+		  "Opened document info" );
+		
+		td.MainInstruction
+		  = "Application has opened the document "
+		    + documentName;
+		
+		string mainContent = "Workshared: "
+		  + isWorkshared
+		  + ( isWorkshared
+		    ? "\nassociated to: "
+		      + ModelPathUtils
+		        .ConvertModelPathToUserVisiblePath(
+		          doc.GetWorksharingCentralModelPath() )
+		    : "" )
+		  + "\nWorkset count: " + wsCount + "\n"
+		  + String.Join( "\n",
+		    fwc.Select<Workset, String>(
+		      ws => ws.Name + " - "
+		        + ( ws.IsOpen ? "open" : "closed" ) ) );
+		
+		td.MainContent = mainContent;
+		
+		td.Show();
 		}
 	}
 }
