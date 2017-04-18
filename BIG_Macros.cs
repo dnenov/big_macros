@@ -115,6 +115,67 @@ namespace BIG_Macros
 			this.Shutdown += new System.EventHandler(Module_Shutdown);
 		}
 		#endregion
+				public void CollectElementIDs()
+		{
+		 	UIDocument uidoc = ActiveUIDocument;
+            Document doc = ActiveUIDocument.Document;
+            
+            View current = doc.ActiveView;
+            
+            List<ElementId> ids = new FilteredElementCollector(doc, current.Id)
+            	.WhereElementIsNotElementType()
+            	.ToElementIds()
+            	.ToList();
+            
+            
+			var builder = new StringBuilder();
+			
+            foreach(ElementId id in ids)
+            {
+            	builder.AppendLine(String.Join("\t",id.ToString()));
+            }
+            
+            
+			var file = new FileStream("C:/Temp/report.txt",FileMode.Create);
+			var writer = new StreamWriter(file);
+			writer.Write(builder.ToString());
+			writer.Flush();
+			writer.Close();
+		}     
+		
+		
+		public void DeleteElementIDs()
+		{
+		 	UIDocument uidoc = ActiveUIDocument;
+            		Document doc = ActiveUIDocument.Document;
+            
+			var file = new FileStream("C:/Temp/report.txt",FileMode.Open);
+			
+			using(StreamReader reader = new StreamReader(file))
+			{
+				while(true)
+				{
+					string line = reader.ReadLine();
+					if(line == null)
+					{
+						break;
+					}
+					try
+					{
+						using(Transaction t = new Transaction(doc,"del"))
+						{
+							t.Start();
+							doc.Delete(new ElementId(int.Parse(line)));
+							t.Commit();
+						}
+					}
+					catch(Exception)
+					{
+						
+					}
+				}
+			}
+		}   
 		public void Overkill()
 		{
 			UIDocument uidoc = this.ActiveUIDocument;
