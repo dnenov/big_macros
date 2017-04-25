@@ -130,10 +130,10 @@ namespace BIG_Macros
             
 			var builder = new StringBuilder();
 			
-            foreach(ElementId id in ids)
-            {
-            	builder.AppendLine(String.Join("\t",id.ToString()));
-            }
+			foreach(ElementId id in ids)
+			{
+				builder.AppendLine(String.Join("\t",id.ToString()));
+			}
             
             
 			var file = new FileStream("C:/Temp/report.txt",FileMode.Create);
@@ -143,7 +143,75 @@ namespace BIG_Macros
 			writer.Close();
 		}     
 		
-		
+		public void FilledRegionPopulate()
+		{
+		    UIDocument uidoc = ActiveUIDocument;
+		    Document doc = ActiveUIDocument.Document;
+		    View current = doc.ActiveView;
+
+		    FilteredElementCollector collector = new FilteredElementCollector(doc);
+
+		    List<Element> filledTypes = collector.OfClass(typeof(FilledRegionType)).ToElements().ToList();
+		    filledTypes = filledTypes.OrderBy(z => z.Name).ToList();
+
+		    string s = "";
+		    int num = filledTypes.Count;
+
+		    List<CurveLoop> cloop = new List<CurveLoop>();
+		    CurveLoop loop = new CurveLoop();
+
+		    double width = 3.0;
+		    double height = 1.5;
+		    double co = 2.0;
+
+		    int length = Convert.ToInt16(Math.Ceiling(Math.Sqrt(num)));
+		    int x = 0;
+		    int y = 0;
+
+		    TextNoteOptions toptions = new TextNoteOptions();
+		    toptions.TypeId = doc.GetDefaultElementTypeId(ElementTypeGroup.TextNoteType);
+
+		    using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
+		    {
+			t.Start();                    
+			int counter = 0;
+
+			List<XYZ> coordinates = new List<XYZ>{
+			    new XYZ(0,0,0),
+			    new XYZ(width,0,0),
+			    new XYZ(width,height,0),
+			    new XYZ(0,height,0),
+			};
+
+			foreach(Element ft in filledTypes)
+			{
+			    List<Curve> curves = new List<Curve>();
+
+			    x = counter%length + 1;
+			    y = counter/length + 1;
+
+			    XYZ pos = new XYZ(co*x*width, -co*y*height,0);
+
+			    Curve c = null;
+
+			    for(int i = 0; i < coordinates.Count; i++)
+			    {
+				c = Line.CreateBound(coordinates[i].Add(pos),coordinates[(i+1)%(coordinates.Count)].Add(pos));
+				curves.Add(c);
+			    }
+
+			    loop = CurveLoop.Create(curves);
+			    cloop.Add(loop);
+
+			    FilledRegion.Create(doc,ft.Id,current.Id,cloop);
+			    cloop.Clear();
+			    TextNote.Create(doc,current.Id, pos.Add(new XYZ(0,-0.2,0)), 0.1,Truncate(ft.Name, 20),toptions);
+			    counter ++;
+			    s += counter.ToString();
+			}  
+			t.Commit();         
+		    }                        
+		}
 		public void DeleteElementIDs()
 		{
 		 	UIDocument uidoc = ActiveUIDocument;
