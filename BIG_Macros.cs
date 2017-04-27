@@ -212,6 +212,57 @@ namespace BIG_Macros
 			t.Commit();         
 		    }                        
 		}
+		public void ReplaceSharedParameter()
+		{
+		    UIDocument uidoc = ActiveUIDocument;
+		    Document doc = ActiveUIDocument.Document;
+		    View current = doc.ActiveView;
+
+		    FilteredElementCollector collector = new FilteredElementCollector(doc);        
+
+				List<SharedParameterElement> sharedParamters = collector
+					.OfClass(typeof(SharedParameterElement))
+					.Cast<SharedParameterElement>()
+					.OrderBy(x => x.Name)
+					.ToList();
+
+				string s = sharedParamters.Count.ToString();
+
+				StringBuilder builder = new StringBuilder();
+
+				var bindings = doc.ParameterBindings;
+
+				BindingMap map = doc.ParameterBindings;
+				DefinitionBindingMapIterator it = map.ForwardIterator();
+				it.Reset();
+
+				Definition def = null;
+
+				while (it.MoveNext())
+				{
+					sharedParamters.RemoveAll(x => x.Name.Equals(it.Key.Name));
+				}
+
+				string e = sharedParamters.Count.ToString();
+
+				builder.Append(s + Environment.NewLine);
+
+				foreach(SharedParameterElement param in sharedParamters)
+				{
+					builder.Append(param.Name + Environment.NewLine);
+				}
+
+				builder.Append(e + Environment.NewLine);
+
+				TaskDialog.Show("Test", builder.ToString());
+
+		    using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
+		    {
+			t.Start();                    
+			doc.Delete(sharedParamters.Select(x => x.Id).ToArray());
+			t.Commit();         
+		    }                        
+		}
 		public void DeleteElementIDs()
 		{
 		 	UIDocument uidoc = ActiveUIDocument;
