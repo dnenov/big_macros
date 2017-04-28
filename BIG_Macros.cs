@@ -211,7 +211,7 @@ namespace BIG_Macros
 			}  
 			t.Commit();         
 		    }                        
-		}
+		}		
 		public void ReplaceSharedParameter()
 		{
 		    UIDocument uidoc = ActiveUIDocument;
@@ -220,48 +220,62 @@ namespace BIG_Macros
 
 		    FilteredElementCollector collector = new FilteredElementCollector(doc);        
 
-				List<SharedParameterElement> sharedParamters = collector
-					.OfClass(typeof(SharedParameterElement))
-					.Cast<SharedParameterElement>()
-					.OrderBy(x => x.Name)
-					.ToList();
+			List<SharedParameterElement> sharedParamters = collector
+				.OfClass(typeof(SharedParameterElement))
+				.Cast<SharedParameterElement>()
+				.OrderBy(x => x.Name)
+				.ToList();
 
-				string s = sharedParamters.Count.ToString();
+			string s = sharedParamters.Count.ToString();
 
-				StringBuilder builder = new StringBuilder();
+			StringBuilder builder = new StringBuilder();
 
-				var bindings = doc.ParameterBindings;
+			var bindings = doc.ParameterBindings;
 
-				BindingMap map = doc.ParameterBindings;
-				DefinitionBindingMapIterator it = map.ForwardIterator();
-				it.Reset();
+			BindingMap map = doc.ParameterBindings;
+			DefinitionBindingMapIterator it = map.ForwardIterator();
+			it.Reset();
 
-				Definition def = null;
+			Definition def = null;
 
-				while (it.MoveNext())
-				{
-					sharedParamters.RemoveAll(x => x.Name.Equals(it.Key.Name));
-				}
+			while (it.MoveNext())
+			{
+				sharedParamters.RemoveAll(x => x.Name.Equals(it.Key.Name));
+			}
 
-				string e = sharedParamters.Count.ToString();
+			string e = sharedParamters.Count.ToString();
 
-				builder.Append(s + Environment.NewLine);
+			builder.Append(String.Format("Number of all Shared Parameters: {0}{1}", s, Environment.NewLine));
+			builder.Append(String.Format("Number of unused Shared Parameters: {0}{1}", e, Environment.NewLine));
 
-				foreach(SharedParameterElement param in sharedParamters)
-				{
-					builder.Append(param.Name + Environment.NewLine);
-				}
+			foreach(SharedParameterElement param in sharedParamters)
+			{
+				builder.Append(param.Name + Environment.NewLine);
+			}
 
-				builder.Append(e + Environment.NewLine);
-
-				TaskDialog.Show("Test", builder.ToString());
-
+//			TaskDialog.Show("Test", builder.ToString());
+			SaveText(builder);
+						
 		    using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
 		    {
-			t.Start();                    
-			doc.Delete(sharedParamters.Select(x => x.Id).ToArray());
-			t.Commit();         
-		    }                        
+				t.Start();                    
+				doc.Delete(sharedParamters.Select(x => x.Id).ToArray());
+				t.Commit();         
+		    }                  
+		}
+		internal void SaveText(StringBuilder builder)
+		{
+			using (System.Windows.Forms.SaveFileDialog dialog = new System.Windows.Forms.SaveFileDialog()) 
+			{
+				dialog.Filter = "txt files (*.txt)|*.txt|All files (*.*)|*.*"  ;
+				dialog.FilterIndex = 2 ;
+				dialog.RestoreDirectory = true ;
+
+			    if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) 
+			    {
+			        File.WriteAllText(dialog.FileName, builder.ToString());
+			    }
+			}			
 		}
 		public void DeleteElementIDs()
 		{
