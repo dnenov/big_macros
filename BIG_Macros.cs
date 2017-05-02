@@ -211,7 +211,37 @@ namespace BIG_Macros
 			}  
 			t.Commit();         
 		    }                        
-		}		
+		}	
+		public void RenameFilledRegionByTextNode()
+		{
+		    UIDocument uidoc = ActiveUIDocument;
+		    Document doc = ActiveUIDocument.Document;
+		    View current = doc.ActiveView;
+
+		    string s = "";
+		    do
+		    {
+			FilteredElementCollector collector = new FilteredElementCollector(doc);            
+
+			    TextNote text = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Pick Text").ElementId) as TextNote;
+
+			    if(!SelectionError(text)) return;
+
+			    s = text.Text;
+
+			    FilledRegion region = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Pick Filled Region").ElementId) as FilledRegion;
+
+			    if(!SelectionError(text)) return;
+
+			    using(Transaction t = new Transaction(doc,"Rename Filled Region"))
+			    {
+				t.Start();
+				doc.GetElement(region.GetTypeId()).Name = s;
+				t.Commit();
+			    }     
+		    }
+		    while (true);
+		}
 		public void ReplaceSharedParameter()
 		{
 		    UIDocument uidoc = ActiveUIDocument;
@@ -252,23 +282,48 @@ namespace BIG_Macros
 			{
 				builder.Append(param.Name + Environment.NewLine);
 			}
-
-//			TaskDialog.Show("Test", builder.ToString());
-			SaveText(builder);
+			
+			using(TaskDialog td = new TaskDialog("Save unused parameter names."))
+			{
+				td.CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No;
+				td.DefaultButton = TaskDialogResult.Yes;
+				
+				TaskDialogResult result = td.Show();
+				if(result == TaskDialogResult.Yes)
+				{
+				    using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
+				    {
+						t.Start();                    
+						SaveText(builder);
+						t.Commit();         
+				    } 					
+				}				
+			}
 						
-		    using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
-		    {
-				t.Start();                    
-				doc.Delete(sharedParamters.Select(x => x.Id).ToArray());
-				t.Commit();         
-		    }                  
+			using(TaskDialog td = new TaskDialog("Delete unused Shared Paramters?"))
+			{
+				td.CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No;
+				td.DefaultButton = TaskDialogResult.Yes;
+				td.FooterText = "Create a back-up before going forward might be a smart idea.";
+				TaskDialogResult result = td.Show();
+				if(result == TaskDialogResult.Yes)
+				{
+				    using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
+				    {
+						t.Start();                    
+						doc.Delete(sharedParamters.Select(x => x.Id).ToArray());
+						t.Commit();         
+				    } 	
+				    TaskDialog.Show("Result", String.Format("{0} paramters have been deleted.", e));
+				}				
+			}                 
 		}
 		internal void SaveText(StringBuilder builder)
 		{
 			using (System.Windows.Forms.SaveFileDialog dialog = new System.Windows.Forms.SaveFileDialog()) 
 			{
 				dialog.Filter = "txt files (*.txt)|*.txt|All files (*.*)|*.*"  ;
-				dialog.FilterIndex = 2 ;
+				dialog.FilterIndex = 1 ;
 				dialog.RestoreDirectory = true ;
 
 			    if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) 
