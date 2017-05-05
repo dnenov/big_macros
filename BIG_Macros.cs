@@ -318,26 +318,11 @@ namespace BIG_Macros
 				}				
 			}                 
 		}
-		internal void SaveText(StringBuilder builder)
-		{
-			using (System.Windows.Forms.SaveFileDialog dialog = new System.Windows.Forms.SaveFileDialog()) 
-			{
-				dialog.Filter = "txt files (*.txt)|*.txt|All files (*.*)|*.*"  ;
-				dialog.FilterIndex = 1 ;
-				dialog.RestoreDirectory = true ;
-
-			    if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) 
-			    {
-			        File.WriteAllText(dialog.FileName, builder.ToString());
-			    }
-			}			
-		}
 		public void DeleteElementIDs()
 		{
-		 	UIDocument uidoc = ActiveUIDocument;
-            		Document doc = ActiveUIDocument.Document;
+    			Document doc = Document;
             
-			var file = new FileStream("C:/Temp/report.txt",FileMode.Open);
+    			var file = LoadText();
 			
 			using(StreamReader reader = new StreamReader(file))
 			{
@@ -352,6 +337,12 @@ namespace BIG_Macros
 					{
 						using(Transaction t = new Transaction(doc,"del"))
 						{
+							FailureHandlingOptions foptions = t.GetFailureHandlingOptions();
+						    FailureHandler fhandler = new FailureHandler();
+						    foptions.SetFailuresPreprocessor(fhandler);
+						    foptions.SetClearAfterRollback(true);
+						    t.SetFailureHandlingOptions(foptions);
+				    
 							t.Start();
 							doc.Delete(new ElementId(int.Parse(line)));
 							t.Commit();
@@ -364,6 +355,57 @@ namespace BIG_Macros
 				}
 			}
 		}   
+		
+		public void SaveElementIDs()
+		{
+			Document doc = Document;
+			
+			Selection selection = this.Selection;
+			
+			StringBuilder builder = new StringBuilder();
+			
+			if(selection.GetElementIds().Count > 0)
+			{
+				foreach(ElementId id in selection.GetElementIds())
+				{
+					builder.AppendLine(id.ToString());
+				}
+				
+				SaveText(builder);
+			}						
+		}
+		
+		internal void SaveText(StringBuilder builder)
+		{
+			using (System.Windows.Forms.SaveFileDialog dialog = new System.Windows.Forms.SaveFileDialog()) 
+			{
+				dialog.Filter = "txt files (*.txt)|*.txt|All files (*.*)|*.*"  ;
+				dialog.FilterIndex = 1 ;
+				dialog.RestoreDirectory = true ;
+
+			    if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) 
+			    {
+			        File.WriteAllText(dialog.FileName, builder.ToString());
+			    }
+			}			
+		}
+		
+		internal string LoadText()
+		{
+			string filename = "";	 
+		    
+			using(var ofd = new System.Windows.Forms.OpenFileDialog())
+			{
+			    System.Windows.Forms.DialogResult result = ofd.ShowDialog();
+			
+			    if (result == System.Windows.Forms.DialogResult.OK && !string.IsNullOrWhiteSpace(ofd.FileName))
+			    {
+			        filename = ofd.FileName;
+			    }
+			}
+
+			return filename;			
+		}
 		public void Overkill()
 		{
 			UIDocument uidoc = this.ActiveUIDocument;
