@@ -337,7 +337,7 @@ namespace BIG_Macros
 					{
 						using(Transaction t = new Transaction(doc,"del"))
 						{
-							FailureHandlingOptions foptions = t.GetFailureHandlingOptions();
+						    FailureHandlingOptions foptions = t.GetFailureHandlingOptions();
 						    FailureHandler fhandler = new FailureHandler();
 						    foptions.SetFailuresPreprocessor(fhandler);
 						    foptions.SetClearAfterRollback(true);
@@ -405,6 +405,475 @@ namespace BIG_Macros
 			}
 
 			return filename;			
+		}
+		
+		public void DeleteElementIDs()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+            
+    		var file = LoadText();
+			
+			using(StreamReader reader = new StreamReader(file))
+			{
+				while(true)
+				{
+					string line = reader.ReadLine();
+					if(line == null)
+					{
+						break;
+					}
+					try
+					{
+						using(Transaction t = new Transaction(doc,"del"))
+						{
+							FailureHandlingOptions foptions = t.GetFailureHandlingOptions();
+						    FailureHandler fhandler = new FailureHandler();
+						    foptions.SetFailuresPreprocessor(fhandler);
+						    foptions.SetClearAfterRollback(true);
+						    t.SetFailureHandlingOptions(foptions);
+				    
+							t.Start();
+							doc.Delete(new ElementId(int.Parse(line)));
+							t.Commit();
+						}
+					}
+					catch(Exception)
+					{
+						
+					}
+				}
+			}
+		}   
+		
+		public void SaveElementIDs()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+			
+			Selection selection = uidoc.Selection;
+			
+			StringBuilder builder = new StringBuilder();
+			
+			if(selection.GetElementIds().Count > 0)
+			{
+				foreach(ElementId id in selection.GetElementIds())
+				{
+					builder.AppendLine(id.ToString());
+				}
+				
+				SaveText(builder);
+			}						
+		}
+		
+		internal void SaveText(StringBuilder builder)
+		{
+			using (System.Windows.Forms.SaveFileDialog dialog = new System.Windows.Forms.SaveFileDialog()) 
+			{
+				dialog.Filter = "txt files (*.txt)|*.txt|All files (*.*)|*.*"  ;
+				dialog.FilterIndex = 1 ;
+				dialog.RestoreDirectory = true ;
+
+			    if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) 
+			    {
+			        File.WriteAllText(dialog.FileName, builder.ToString());
+			    }
+			}			
+		}
+		
+		internal string LoadText()
+		{
+			string filename = "";	 
+		    
+			using(var ofd = new System.Windows.Forms.OpenFileDialog())
+			{
+			    System.Windows.Forms.DialogResult result = ofd.ShowDialog();
+			
+			    if (result == System.Windows.Forms.DialogResult.OK && !string.IsNullOrWhiteSpace(ofd.FileName))
+			    {
+			        filename = ofd.FileName;
+			    }
+			}
+
+			return filename;			
+		}
+		
+		public void CreateWorksets()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+			
+			string [] names = {
+				"GHA-Walls",
+				"GHA-Doors",
+				"GHA-Floors",
+				"GHA-Ceilings",
+				"GHA-Furniture",
+				"GHA-Stairs & Railings",
+				"GHA-Structure",
+				"GHA-Windows",
+				"GHA-Site",
+				"X-Cad",
+				"X-Admin",
+				"X-Links",				
+			};
+			
+				CreateWorkset(doc, "test");
+				
+			foreach(string n in names)
+			{
+				CreateWorkset(doc, n);
+			}
+		}
+		
+		public void PopulateFamily()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+			
+			FamilyManager manager = doc.FamilyManager;
+				
+			BuiltInParameterGroup addToGroup = BuiltInParameterGroup.PG_VISIBILITY;
+			ParameterType paramType = ParameterType.YesNo;
+						
+			Selection selection = uidoc.Selection;
+			ElementId current = doc.ActiveView.Id;
+			
+			TextNote tbox = doc.GetElement(selection.PickObject(ObjectType.Element, "Pick Text Box").ElementId) as TextNote;
+			
+			XYZ pos = (tbox.get_BoundingBox(doc.ActiveView).Max + tbox.get_BoundingBox(doc.ActiveView).Min) *0.5;
+			var width = tbox.Width + 0.01;
+			TextNoteOptions opt = new TextNoteOptions();
+		    opt.TypeId = doc.GetDefaultElementTypeId(ElementTypeGroup.TextNoteType);
+			
+			Dictionary<string, string> signs = new Dictionary<string, string>()
+			{
+				{"S13", "Fire Door Keep Shut"},
+				{"S14", "Fire Door Keep Locked"},
+				{"S16", "Automatic Fire Door, Keep Clear at Night"},
+				{"S20", "Fire Escape Keep Clear"},
+				{"S22", "Fire Exit"},
+				{"S23", "Slide to Open"},
+				{"S25", "Push Bar to Open"},
+				{"S26", "Directional Arrow(Green)"},
+				{"S27", "Collection of Fire Fighting Equipment"},
+				{"S28", "Fire Alarm Call Point"},
+				{"S30", "Fire Hose Reel"},
+				{"S31", "Fire Extinguisher"},
+				{"S33", "Dry Riser"},
+				{"S35", "Firemans Switch"},
+				{"S38", "Fire Plan"},
+				{"S39", "Directional Arrow(Red)"},
+			};
+			
+			using(Transaction t = new Transaction(doc, "Populate Parameters"))
+			{
+				t.Start();		
+				foreach(KeyValuePair<string, string> pair in signs)
+				{					
+					TextNote note = TextNote.Create(doc, current, pos, width, pair.Value, opt);					
+					FamilyParameter famParam = doc.FamilyManager.AddParameter(pair.Key + " Bottom", addToGroup, paramType, true);
+					Parameter param = note.LookupParameter("Visible");
+					manager.AssociateElementParameterToFamilyParameter(param, famParam);
+					//manager.Set(famParam, 0);
+					manager.SetFormula(famParam, String.Format("and({0}, {1})", pair.Key, "Bottom Label"));					
+				}
+				t.Commit();
+			}					
+		}
+		
+		public void DeleteSelectedType()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+			
+			Selection selection = uidoc.Selection;
+			
+			TextNote tbox = doc.GetElement(selection.PickObject(ObjectType.Element, "Pick Text Box").ElementId) as TextNote;
+			
+			if (tbox == null) return;
+			
+			using(Transaction t = new Transaction(doc, "Delete Type"))
+			{
+				t.Start();
+				doc.Delete(tbox.GetTypeId());				
+				t.Commit();
+			}
+			
+		}
+		
+		internal Workset CreateWorkset(Document document, string name)
+		{
+			Workset newWorkset = null;
+			// Worksets can only be created in a document with worksharing enabled
+			if (document.IsWorkshared)
+			{
+				string worksetName = "New Workset";
+				// Workset name must not be in use by another workset
+				if (WorksetTable.IsWorksetNameUnique(document, worksetName))
+				{
+					using (Transaction worksetTransaction = new Transaction(document, "Set preview view id"))
+					{
+						worksetTransaction.Start();
+						newWorkset = Workset.Create(document, worksetName);
+						worksetTransaction.Commit();
+					}
+				}
+			}
+			return newWorkset;
+		}
+		
+		public void DeleteUnusedSharedParameter()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+		    View current = doc.ActiveView;
+
+		    FilteredElementCollector collector = new FilteredElementCollector(doc);        
+					    		    
+			List<SharedParameterElement> sharedParamters = collector
+				.OfClass(typeof(SharedParameterElement))
+				.Cast<SharedParameterElement>()
+				.OrderBy(x => x.Name)
+				.ToList();
+
+			string s = sharedParamters.Count.ToString();
+
+			StringBuilder builder = new StringBuilder();
+
+			var bindings = doc.ParameterBindings;
+
+			BindingMap map = doc.ParameterBindings;
+			DefinitionBindingMapIterator it = map.ForwardIterator();
+			it.Reset();
+
+			Definition def = null;
+
+			while (it.MoveNext())
+			{
+				sharedParamters.RemoveAll(x => x.Name.Equals(it.Key.Name));
+			}
+
+			string e = sharedParamters.Count.ToString();
+
+			builder.Append(String.Format("Number of all Shared Parameters: {0}{1}", s, Environment.NewLine));
+			builder.Append(String.Format("Number of unused Shared Parameters: {0}{1}", e, Environment.NewLine));
+
+			foreach(SharedParameterElement param in sharedParamters)
+			{
+				builder.Append(param.Name + Environment.NewLine);
+			}
+			
+			using(TaskDialog td = new TaskDialog("Save unused parameter names."))
+			{
+				td.CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No;
+				td.DefaultButton = TaskDialogResult.Yes;
+				
+				TaskDialogResult result = td.Show();
+				if(result == TaskDialogResult.Yes)
+				{
+				    using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
+				    {
+						t.Start();                    
+						SaveText(builder);
+						t.Commit();         
+				    } 					
+				}				
+			}
+						
+			using(TaskDialog td = new TaskDialog("Delete unused Shared Paramters?"))
+			{
+				td.CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No;
+				td.DefaultButton = TaskDialogResult.Yes;
+				td.FooterText = "Create a back-up before going forward might be a smart idea.";
+				TaskDialogResult result = td.Show();
+				if(result == TaskDialogResult.Yes)
+				{
+				    using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
+				    {
+						t.Start();                    
+						doc.Delete(sharedParamters.Select(x => x.Id).ToArray());
+						t.Commit();         
+				    } 	
+				    TaskDialog.Show("Result", String.Format("{0} paramters have been deleted.", e));
+				}				
+			}                 
+		}
+		
+		public void DeleteUnusedParameter()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+		    View current = doc.ActiveView;
+
+		    FilteredElementCollector collector = new FilteredElementCollector(doc);        
+			    		    
+			List<ParameterElement> parameters = collector
+				.OfClass(typeof(ParameterElement))
+				.Cast<ParameterElement>()
+				.OrderBy(x => x.Name)
+				.ToList();
+
+			string s = parameters.Count.ToString();
+
+			StringBuilder builder = new StringBuilder();
+
+			var bindings = doc.ParameterBindings;
+
+			BindingMap map = doc.ParameterBindings;
+			DefinitionBindingMapIterator it = map.ForwardIterator();
+			it.Reset();
+
+			Definition def = null;
+			/*
+			while (it.MoveNext())
+			{
+				parameters.RemoveAll(x => x.Name.Equals(it.Key.Name));
+			}
+			*/
+			string e = parameters.Count.ToString();
+
+			builder.Append(String.Format("Number of all Shared Parameters: {0}{1}", s, Environment.NewLine));
+			builder.Append(String.Format("Number of unused Shared Parameters: {0}{1}", e, Environment.NewLine));
+
+			foreach(ParameterElement param in parameters)
+			{
+				builder.Append(param.Name + " : " + param.Id + Environment.NewLine);
+			}
+			
+			using(TaskDialog td = new TaskDialog("Save unused parameter names."))
+			{
+				td.CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No;
+				td.DefaultButton = TaskDialogResult.Yes;
+				
+				TaskDialogResult result = td.Show();
+				if(result == TaskDialogResult.Yes)
+				{               
+					SaveText(builder);	
+				}				
+			}
+						
+			using(TaskDialog td = new TaskDialog("Delete unused Shared Paramters?"))
+			{
+				td.CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No;
+				td.DefaultButton = TaskDialogResult.Yes;
+				td.FooterText = "Create a back-up before going forward might be a smart idea.";
+				TaskDialogResult result = td.Show();
+				if(result == TaskDialogResult.Yes)
+				{
+				    using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
+				    {
+						t.Start();                    
+						doc.Delete(parameters.Select(x => x.Id).ToArray());
+						t.Commit();         
+				    } 	
+				    TaskDialog.Show("Result", String.Format("{0} paramters have been deleted.", e));
+				}				
+			}                 
+		}
+		
+		public void ShowLevelInfo()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+			Getinfo_Level(doc);
+		}
+		
+		private void Getinfo_Level(Document document)
+		{
+	        StringBuilder levelInformation = new StringBuilder();
+	        int levelNumber = 0;
+	        FilteredElementCollector collector = new FilteredElementCollector(document);
+	        ICollection<Element> collection = collector.OfClass(typeof(Level)).ToElements();
+	        foreach (Element e in collection)
+	        {
+	                Level level = e as Level;
+	        
+	                if (null != level)
+	                {
+	                        // keep track of number of levels
+	                        levelNumber++;
+	                
+	                        //get the name of the level
+	                        levelInformation.Append("\nLevel Name: " + level.Name);
+	
+	                        //get the elevation of the level
+	                        levelInformation.Append("\n\tElevation: " + level.Elevation);
+	                
+	                        // get the project elevation of the level
+	                        levelInformation.Append("\n\tProject Elevation: " + level.ProjectElevation);
+	                }
+	        }
+	
+	        //number of total levels in current document
+	        levelInformation.Append("\n\n There are " + levelNumber + " levels in the document!");
+	        
+	        //show the level information in the messagebox
+	        TaskDialog.Show("Revit",levelInformation.ToString());
+		}	
+		
+		public void DuplicateViewsByParamter()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+			
+			string parameterName = "View Category";
+			string parameterValue = "9 Originals";
+			
+			List<View> views = new FilteredElementCollector(doc)
+				.OfCategory(BuiltInCategory.OST_Views)
+				.WhereElementIsNotElementType()
+				.Where(x => x.LookupParameter(parameterName).AsString() != null &&
+				       x.LookupParameter(parameterName).AsString().Contains(parameterValue))
+				.Cast<View>()
+				.Where(x => !x.IsTemplate)
+				.ToList();
+						
+			using(Transaction t = new Transaction(doc, "Duplicate Views"))
+			{
+				t.Start();
+				foreach(View v in views)
+				{
+					v.Duplicate(ViewDuplicateOption.Duplicate);
+				}
+				t.Commit();
+			}
+		}
+		
+		public void DeleteViewsAndSheets()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+			
+			List<ElementId> viewsToDelete = new FilteredElementCollector(doc)
+				.OfCategory(BuiltInCategory.OST_Views)
+				.WhereElementIsNotElementType()
+				.Where(x => x.LookupParameter("View Category").AsString() != null &&
+				       !x.LookupParameter("View Category").AsString().Contains("9 Originals"))
+				.Select(x => x.Id)
+				.ToList();
+			
+			string [] groups = {
+				"ADMIN",
+				"SPLASH SCREEN"
+			};
+			
+			List<ElementId> sheetsToDelete = new FilteredElementCollector(doc)
+				.OfCategory(BuiltInCategory.OST_Sheets)
+				.WhereElementIsNotElementType()
+				.Where(x => x.LookupParameter("Sheet Group").AsString() != null &&
+				       !groups.Contains(x.LookupParameter("Sheet Group").AsString()))
+				.Select(x => x.Id)
+				.ToList();
+			
+			using(Transaction t = new Transaction(doc, "Delete Views and Sheets"))
+			{
+				t.Start();
+				doc.Delete(viewsToDelete);
+				doc.Delete(sheetsToDelete);
+				t.Commit();
+			}
+			
 		}
 		public void Overkill()
 		{
