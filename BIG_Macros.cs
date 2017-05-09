@@ -143,6 +143,18 @@ namespace BIG_Macros
 			writer.Close();
 		}     
 		
+		private string StringDebug(List<String> stringlist)
+		{
+			string s = "";
+			
+			foreach(String str in stringlist)
+			{
+				s += String.Format("{0}{1}", str, Environment.NewLine);
+			}
+			
+			return s;
+		}
+		
 		public void FilledRegionPopulate()
 		{
 		    UIDocument uidoc = ActiveUIDocument;
