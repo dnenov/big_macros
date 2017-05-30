@@ -224,6 +224,37 @@ namespace BIG_Macros
 			t.Commit();         
 		    }                        
 		}	
+		public void ChangeTextFont()
+		{
+			Document doc = ActiveUIDocument.Document;
+			
+			FilteredElementCollector coll = new FilteredElementCollector(doc);
+						
+			var tntypes = new FilteredElementCollector(doc).OfClass(typeof(TextNoteType)).ToList();
+			
+			var tetypes = new FilteredElementCollector(doc).OfClass(typeof(TextElementType)).ToList();
+
+			using(Transaction t = new Transaction(doc, "Change Font"))
+			{
+				t.Start();
+				
+				foreach(var tt in tntypes)
+				{
+					TextNoteType type = tt as TextNoteType;
+					if(type == null) continue;
+					
+					type.LookupParameter("Text Font").Set("Gill Sans MT");
+				}
+				foreach(var te in tetypes)
+				{
+					TextElementType type = te as TextElementType;
+					if(type == null) continue;
+					
+					type.LookupParameter("Text Font").Set("Gill Sans MT");
+				}				
+				t.Commit();
+			}
+		}
 		public void RenameFilledRegionByTextNode()
 		{
 		    UIDocument uidoc = ActiveUIDocument;
