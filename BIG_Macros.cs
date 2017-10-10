@@ -155,6 +155,81 @@ namespace BIG_Macros
 			return s;
 		}
 		
+		public void BulkReloadLinks()
+		{
+			UIApplication uiApp = this;
+			UIDocument uidoc = uiApp.ActiveUIDocument;
+			Document doc = uiApp.ActiveUIDocument.Document;
+			
+			List<RevitLinkType> links = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkType)).Cast<RevitLinkType>().ToList();
+			
+			OpenFileDialog theDialogRevit = new OpenFileDialog();
+			theDialogRevit.Title = "Select Revit Project Files";
+			theDialogRevit.Filter = "RVT files|*.rvt";
+			theDialogRevit.FilterIndex = 1;
+			theDialogRevit.Multiselect = true;
+			
+			if (theDialogRevit.ShowDialog() == DialogResult.OK)
+			{
+                foreach (String projectPath in theDialogRevit.FileNames)
+                {
+                 	FileInfo filePath = new FileInfo(projectPath);
+                 	string filename = filePath.Name;
+                    ModelPath mp = ModelPathUtils.ConvertUserVisiblePathToModelPath(filePath.FullName);					
+		            WorksetConfiguration wc = new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets);
+		            
+		            RevitLinkType link = links.FirstOrDefault(x => x.Name.Equals(filename));
+		            if(link != null)
+		            {
+		            	link.LoadFrom(mp, wc);
+		            }
+                }
+			}
+		}
+		
+	public void SaveRevitFiles()
+	{   
+			OpenFileDialog theDialogRevit = new OpenFileDialog();
+			theDialogRevit.Title = "Select Revit Project Files";
+			theDialogRevit.Filter = "RVT files|*.rvt";
+			theDialogRevit.FilterIndex = 1;
+			theDialogRevit.InitialDirectory = @"C:\";
+			theDialogRevit.Multiselect = true;
+			if (theDialogRevit.ShowDialog() == DialogResult.OK)
+			{
+				string mpath = "";
+		        string mpathOnlyFilename = "";
+		        FolderBrowserDialog folderBrowserDialog1 = new FolderBrowserDialog();
+		        folderBrowserDialog1.Description = "Select Folder Where Revit Projects to be Saved in Local";
+		        folderBrowserDialog1.RootFolder = Environment.SpecialFolder.MyComputer;
+		        if (folderBrowserDialog1.ShowDialog() == DialogResult.OK)
+		        {
+		            mpath = folderBrowserDialog1.SelectedPath;
+	                foreach (String projectPath in theDialogRevit.FileNames)
+	                {
+	                 	FileInfo filePath = new FileInfo(projectPath);
+                        ModelPath mp = ModelPathUtils.ConvertUserVisiblePathToModelPath(filePath.FullName);
+                        OpenOptions opt = new OpenOptions();
+                        opt.DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets;
+                        opt.Audit = true;
+                        mpathOnlyFilename = filePath.Name;
+                        Document openedDoc = Application.OpenDocumentFile(mp, opt);   
+                        SaveAsOptions options = new SaveAsOptions();
+                        if(openedDoc.IsWorkshared)
+                        {
+	                        WorksharingSaveAsOptions wsOptions = new WorksharingSaveAsOptions();
+	                        wsOptions.SaveAsCentral = true;
+                        	options.SetWorksharingOptions(wsOptions);                          	
+                        }
+                        options.OverwriteExistingFile = true;
+                        options.MaximumBackups = 1;
+                        ModelPath modelPathout = ModelPathUtils.ConvertUserVisiblePathToModelPath(mpath + "\\" + mpathOnlyFilename);
+                        openedDoc.SaveAs(modelPathout, options);
+                        openedDoc.Close(false);
+	                }
+		        }
+		}
+       	}	
 		public void FilledRegionPopulate()
 		{
 		    UIDocument uidoc = ActiveUIDocument;
