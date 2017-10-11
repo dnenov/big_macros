@@ -187,6 +187,58 @@ namespace BIG_Macros
 			}
 		}
 		
+	public void SelectUniqueModelGroups()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+		    View current = doc.ActiveView;
+		    
+		    List<GroupType> gtypes = new FilteredElementCollector(doc).OfClass(typeof(GroupType)).WhereElementIsElementType().Cast<GroupType>().ToList();
+		    List<Group> groups = new FilteredElementCollector(doc).OfClass(typeof(Group)).WhereElementIsNotElementType().Cast<Group>().ToList();
+		    		    
+		    HashSet<ElementId> usedTypes = new HashSet<ElementId>();
+		    HashSet<ElementId> safe = new HashSet<ElementId>();
+		    
+		    foreach(var g in groups)
+		    {
+		    	if(!usedTypes.Add(g.GroupType.Id) && usedTypes.Contains(g.GroupType.Id))
+		    	{
+		    		safe.Add(g.GroupType.Id);
+		    	}
+		    }
+		    
+		    var intersect = usedTypes.Except(safe);
+		    
+		    //TaskDialog.Show("Test", String.Format("{0} safe and {1} used and {2} total", safe.Count.ToString(), usedTypes.Count.ToString(), gtypes.Count().ToString()));
+		    
+		    var test = groups.Where(x => intersect.Contains(x.GroupType.Id)).Select(x => x.Id);
+		    uidoc.Selection.SetElementIds(test.ToList());
+		}
+		public void ReportCopyMonitored()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+		    View current = doc.ActiveView;
+
+		    FilteredElementCollector collector = new FilteredElementCollector(doc);        
+		    
+		    IList<Element> monitored = collector.WhereElementIsNotElementType().Where(x => x.GetMonitoredLinkElementIds().Count > 0).ToList();
+		    
+		    TaskDialog.Show("Test", monitored.Count.ToString());			
+		}
+		public void ReportDesignOptions()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+		    View current = doc.ActiveView;
+
+		    FilteredElementCollector collector = new FilteredElementCollector(doc);        
+		    
+		    IList<Element> dosets = collector.OfCategory(BuiltInCategory.OST_DesignOptionSets).ToList();
+		   
+		    TaskDialog.Show("Test", dosets.Count.ToString());	
+			
+		}	
 	public void SaveRevitFiles()
 	{   
 			OpenFileDialog theDialogRevit = new OpenFileDialog();
@@ -741,82 +793,7 @@ namespace BIG_Macros
 			return newWorkset;
 		}
 		
-		public void DeleteUnusedSharedParameter()
-		{
-			UIDocument uidoc = ActiveUIDocument;
-			Document doc = uidoc.Document;
-		    View current = doc.ActiveView;
-
-		    FilteredElementCollector collector = new FilteredElementCollector(doc);        
-					    		    
-			List<SharedParameterElement> sharedParamters = collector
-				.OfClass(typeof(SharedParameterElement))
-				.Cast<SharedParameterElement>()
-				.OrderBy(x => x.Name)
-				.ToList();
-
-			string s = sharedParamters.Count.ToString();
-
-			StringBuilder builder = new StringBuilder();
-
-			var bindings = doc.ParameterBindings;
-
-			BindingMap map = doc.ParameterBindings;
-			DefinitionBindingMapIterator it = map.ForwardIterator();
-			it.Reset();
-
-			Definition def = null;
-
-			while (it.MoveNext())
-			{
-				sharedParamters.RemoveAll(x => x.Name.Equals(it.Key.Name));
-			}
-
-			string e = sharedParamters.Count.ToString();
-
-			builder.Append(String.Format("Number of all Shared Parameters: {0}{1}", s, Environment.NewLine));
-			builder.Append(String.Format("Number of unused Shared Parameters: {0}{1}", e, Environment.NewLine));
-
-			foreach(SharedParameterElement param in sharedParamters)
-			{
-				builder.Append(param.Name + Environment.NewLine);
-			}
-			
-			using(TaskDialog td = new TaskDialog("Save unused parameter names."))
-			{
-				td.CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No;
-				td.DefaultButton = TaskDialogResult.Yes;
-				
-				TaskDialogResult result = td.Show();
-				if(result == TaskDialogResult.Yes)
-				{
-				    using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
-				    {
-						t.Start();                    
-						SaveText(builder);
-						t.Commit();         
-				    } 					
-				}				
-			}
-						
-			using(TaskDialog td = new TaskDialog("Delete unused Shared Paramters?"))
-			{
-				td.CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No;
-				td.DefaultButton = TaskDialogResult.Yes;
-				td.FooterText = "Create a back-up before going forward might be a smart idea.";
-				TaskDialogResult result = td.Show();
-				if(result == TaskDialogResult.Yes)
-				{
-				    using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
-				    {
-						t.Start();                    
-						doc.Delete(sharedParamters.Select(x => x.Id).ToArray());
-						t.Commit();         
-				    } 	
-				    TaskDialog.Show("Result", String.Format("{0} paramters have been deleted.", e));
-				}				
-			}                 
-		}
+		
 		
 		public void DeleteUnusedParameter()
 		{
@@ -842,17 +819,16 @@ namespace BIG_Macros
 			DefinitionBindingMapIterator it = map.ForwardIterator();
 			it.Reset();
 
-			Definition def = null;
-			/*
+			
 			while (it.MoveNext())
 			{
 				parameters.RemoveAll(x => x.Name.Equals(it.Key.Name));
 			}
-			*/
+			
 			string e = parameters.Count.ToString();
 
-			builder.Append(String.Format("Number of all Shared Parameters: {0}{1}", s, Environment.NewLine));
-			builder.Append(String.Format("Number of unused Shared Parameters: {0}{1}", e, Environment.NewLine));
+			builder.Append(String.Format("Number of all Parameters: {0}{1}", s, Environment.NewLine));
+			builder.Append(String.Format("Number of unused Parameters: {0}{1}", e, Environment.NewLine));
 
 			foreach(ParameterElement param in parameters)
 			{
@@ -870,8 +846,10 @@ namespace BIG_Macros
 					SaveText(builder);	
 				}				
 			}
-						
-			using(TaskDialog td = new TaskDialog("Delete unused Shared Paramters?"))
+			
+			int deleted = 0;	
+			
+			using(TaskDialog td = new TaskDialog("Delete unused Paramters?"))
 			{
 				td.CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No;
 				td.DefaultButton = TaskDialogResult.Yes;
@@ -879,15 +857,41 @@ namespace BIG_Macros
 				TaskDialogResult result = td.Show();
 				if(result == TaskDialogResult.Yes)
 				{
-				    using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
-				    {
-						t.Start();                    
-						doc.Delete(parameters.Select(x => x.Id).ToArray());
-						t.Commit();         
-				    } 	
-				    TaskDialog.Show("Result", String.Format("{0} paramters have been deleted.", e));
+					foreach(var param in parameters)
+					{
+					
+					    using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
+					    {
+		        			FailureHandlingOptions options = t.GetFailureHandlingOptions();
+					    	FailureHandler failureHandler = new FailureHandler();
+			                failureHandler = new FailureHandler();
+			                options.SetFailuresPreprocessor(failureHandler);
+			                options.SetClearAfterRollback(true);
+			                t.SetFailureHandlingOptions(options);	
+	                
+							t.Start();                    
+							doc.Delete(param.Id);
+							t.Commit();         
+							deleted ++;
+					    } 	
+					}
+			    	TaskDialog.Show("Result", String.Format("{0} paramters have been deleted.", deleted.ToString()));
 				}				
-			}                 
+			}			           
+		}		
+		internal void SaveText(StringBuilder builder)
+		{
+			using (System.Windows.Forms.SaveFileDialog dialog = new System.Windows.Forms.SaveFileDialog()) 
+			{
+				dialog.Filter = "txt files (*.txt)|*.txt|All files (*.*)|*.*"  ;
+				dialog.FilterIndex = 1 ;
+				dialog.RestoreDirectory = true ;
+
+			    if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) 
+			    {
+			        File.WriteAllText(dialog.FileName, builder.ToString());
+			    }
+			}			
 		}
 		
 		public void ShowLevelInfo()
