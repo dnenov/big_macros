@@ -1967,6 +1967,95 @@ namespace BIG_Macros
             
             return;
         }        
+		public void OffAxis()
+		{
+            Document doc = this.ActiveUIDocument.Document;			
+			Selection selection = this.ActiveUIDocument.Selection;
+			List<ElementId> ids = selection.PickObjects(ObjectType.Element, "Pick Axis to fix").ToList().Select(x => x.ElementId).ToList();
+			
+			foreach(ElementId id in ids)
+			{
+				Fix(id);
+			}
+		}
+		
+	    private void Fix(ElementId id)
+        {            
+            Document doc = this.ActiveUIDocument.Document;
+			Curve locationLine = (doc.GetElement(id) as Grid).Curve;
+            
+			/*
+            // mini procedure to make sure rotation a line doesn't drag other lines with it
+            if(doc.GetElement(id).Name.Equals("Model Lines"))
+            {
+                ElementArray empty = locationLine.get_ElementsAtJoin(0);
+                using (Transaction temp = new Transaction(doc, "Temporary cut joined element"))
+                {
+                    temp.Start();
+                    temp.Commit();
+                }
+            }
+			*/
+            double rotation = getRotation(locationLine);
+
+            Line axis = getAxis(locationLine);
+
+            using (Transaction t = new Transaction(doc, "Rotate off axis element."))
+            {
+                t.Start();
+                ElementTransformUtils.RotateElement(doc, id, axis, (rotation));
+                t.Commit();
+            }
+        }
+        /// <summary>
+        ///  Get Axis of rotation (Z) of line
+        /// </summary>
+        /// <param name="locationLine"></param>
+        /// <returns></returns>
+        private Line getAxis(Curve locationLine)
+        {
+            XYZ basePoint = locationLine.GetEndPoint(0);
+            XYZ direction = (locationLine as Line).Direction;
+            XYZ cross = XYZ.BasisY.CrossProduct(direction).Normalize();
+            return cross.IsZeroLength() ? null : Line.CreateBound(basePoint, cross+basePoint);
+        }
+        /// <summary>
+        ///  Get Axis of rotation (Z) of plane
+        /// </summary>
+        /// <param name="locationLine"></param>
+        /// <returns></returns>
+        private Line getAxis(Plane plane)
+        {
+            XYZ basePoint = plane.Origin;
+            XYZ direction = plane.XVec;
+            XYZ cross = XYZ.BasisY.CrossProduct(direction).Normalize();
+            return cross.IsZeroLength() ? null : Line.CreateBound(basePoint, cross + basePoint);
+        }
+        /// <summary>
+        /// Get rotation angle of line
+        /// </summary>
+        /// <param name="locationLine"></param>
+        /// <returns></returns>
+        private double getRotation(Curve locationLine)
+        {
+            Line line = locationLine as Line;
+            double angle = XYZ.BasisY.AngleTo(line.Direction);
+            if (angle > 0)
+            {
+                while (angle > 0.01)
+                {
+                    angle -= Math.PI / 4;
+                }
+            }
+            else
+            {
+                while (angle < -0.01)
+                {
+                    angle += Math.PI / 4;
+                }
+            }
+            return -angle;
+        }
         public void PurgeImportedLines()
         {
             Document doc = ActiveUIDocument.Document;
