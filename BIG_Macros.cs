@@ -2703,5 +2703,278 @@ namespace BIG_Macros
 		
 		td.Show();
 		}
+		
+		public void PopulateAreasToRooms()
+		{			
+            Document doc = ActiveUIDocument.Document;
+            
+            Level level = new FilteredElementCollector(doc)
+            	.WhereElementIsNotElementType()
+            	.OfCategory(BuiltInCategory.OST_Levels)
+            	.Cast<Level>()
+            	.Where(x => x.Name.Equals("L.04_A_FFL"))
+            	.FirstOrDefault();            
+            
+            Level levelRooms = new FilteredElementCollector(doc)
+            	.WhereElementIsNotElementType()
+            	.OfCategory(BuiltInCategory.OST_Levels)
+            	.Cast<Level>()
+            	.Where(x => x.Name.Equals("L.04_C_FFL"))
+            	.FirstOrDefault();
+            
+            //AreaScheme _scheme = document.GetElement(_area.get_Parameter(BuiltInParameter.AREA_SCHEME_ID).AsElementId()) as AreaScheme;
+            //string _AreaSchemeName = _scheme.get_Parameter(BuiltInParameter.AREA_SCHEME_NAME).AsString();
+                    
+            List<Area> areas = new FilteredElementCollector(doc)
+            	.WhereElementIsNotElementType()
+            	.OfCategory(BuiltInCategory.OST_Areas)
+            	.Cast<Area>()
+            	.Where(x => x.Name.Contains("Bed"))
+				.Where(x => x.Level.Name.Equals(level.Name))
+            	.Where(x => (doc.GetElement(x.get_Parameter(BuiltInParameter.AREA_SCHEME_ID).AsElementId()) as AreaScheme)
+            	       .get_Parameter(BuiltInParameter.AREA_SCHEME_NAME).AsString().Equals("Residential NSA"))
+            	.ToList();
+			            
+            List<Room> rooms = new FilteredElementCollector(doc)
+            	.WhereElementIsNotElementType()
+            	.OfCategory(BuiltInCategory.OST_Rooms)
+            	.Cast<Room>()
+				.Where(x => x.Level.Name.Equals(levelRooms.Name))
+            	.ToList();
+                     
+            TaskDialog.Show("Test", areas.Count.ToString() + ":" + rooms.Count.ToString());
+            
+            using(Transaction t = new Transaction(doc, "Populate Area information"))
+            {
+            	t.Start();
+	            foreach(Area area in areas)
+	            {
+	            	if(area == null || !(area.Area > 0.1)) continue;
+	            	foreach(Room room in rooms)
+	            	{
+	            		if(room == null) continue;
+	            		
+	            		if(AreaContains(area, (room.Location as LocationPoint).Point))
+						{
+	            			string unitType = area.Name[0] + " bedroom";
+	            			string areaNumber = area.LookupParameter("Apartment Type").AsString();
+	            			string number = String.Format("{0}{1}{2}", unitType, Environment.NewLine, areaNumber);
+	            			room.Number = number;
+	            			break;
+						}   
+	            	}
+	            }
+	            t.Commit();
+            }            
+		}
+		
+		private bool AreaContains(Area a, XYZ p1)
+		{
+			bool ret = false;
+			var p = MaakPuntArray( a );
+			PointInPoly pp = new PointInPoly();
+			ret = pp.PolyGonContains( p, p1 );
+			return ret;
+		}
+		private List<XYZ> MaakPuntArray(Area area)
+		{
+			SpatialElementBoundaryOptions opt
+			  = new SpatialElementBoundaryOptions();
+			
+			opt.SpatialElementBoundaryLocation
+			  = SpatialElementBoundaryLocation.Center;
+			
+			var boundaries = area.GetBoundarySegments(
+			  opt );
+			
+			return MaakPuntArray( boundaries );
+		}
+		private List<XYZ> MaakPuntArray(IList<IList<BoundarySegment>> boundaries)
+		{
+			List<XYZ> puntArray = new List<XYZ>();
+			foreach( var bl in boundaries )
+			{
+				foreach( var s in bl )
+				{
+					Curve c = s.GetCurve();
+					AddToPunten(puntArray, c.GetEndPoint(0));
+					AddToPunten(puntArray, c.GetEndPoint(1));
+				}
+			}
+			puntArray.Add( puntArray.First() );
+			return puntArray;
+		}
+		private void AddToPunten(List<XYZ> XYZarray,XYZ p1)
+		{
+			var p = XYZarray.Where(
+			  c => Math.Abs( c.X - p1.X ) < 0.001
+			    && Math.Abs( c.Y - p1.Y ) < 0.001 )
+			  .FirstOrDefault();
+			
+			if( p == null )
+			{
+			  XYZarray.Add( p1 );
+			}
+		}
 	}
+	
+	public class UVArray
+  {
+		
+    public UV TOUV( XYZ point )
+    {
+      UV ret = new UV( point.X, point.Y );
+      return ret;
+    }
+    
+    List<UV> arrayPoints;
+    public UVArray( List<XYZ> XYZArray )
+    {
+      arrayPoints = new List<UV>();
+      foreach( var p in XYZArray )
+      {
+        arrayPoints.Add( TOUV(p) );
+      }
+    }
+
+    public UV get_Item( int i )
+    {
+      return arrayPoints[i];
+    }
+
+    public int Size
+    {
+      get
+      {
+        return arrayPoints.Count;
+      }
+    }
+  }
+
+    public class PointInPoly
+  {
+    /// <summary>
+    /// Determine the quadrant of a polygon vertex 
+    /// relative to the test point.
+    /// </summary>
+    Quadrant GetQuadrant( UV vertex, UV p )
+    {
+      return ( vertex.U > p.U )
+        ? ( ( vertex.V > p.V ) ? 0 : 3 )
+        : ( ( vertex.V > p.V ) ? 1 : 2 );
+    }
+
+    /// <summary>
+    /// Determine the X intercept of a polygon edge 
+    /// with a horizontal line at the Y value of the 
+    /// test point.
+    /// </summary>
+    double X_intercept( UV p, UV q, double y )
+    {
+      Debug.Assert( 0 != ( p.V - q.V ),
+        "unexpected horizontal segment" );
+
+      return q.U
+        - ( ( q.V - y )
+          * ( ( p.U - q.U ) / ( p.V - q.V ) ) );
+    }
+
+    void AdjustDelta(
+      ref int delta,
+      UV vertex,
+      UV next_vertex,
+      UV p )
+    {
+      switch( delta )
+      {
+        // make quadrant deltas wrap around:
+        case 3: delta = -1; break;
+        case -3: delta = 1; break;
+        // check if went around point cw or ccw:
+        case 2:
+        case -2:
+          if( X_intercept( vertex, next_vertex, p.V )
+            > p.U )
+          {
+            delta = -delta;
+          }
+          break;
+      }
+    }
+    
+    public UV TOUV( XYZ point )
+    {
+      UV ret = new UV( point.X, point.Y );
+      return ret;
+    }
+
+    public bool PolyGonContains( List<XYZ> xyZArray, XYZ p1 )
+    {
+      UVArray uva = new UVArray( xyZArray );
+      return PolygonContains( uva, TOUV(p1) );
+    }
+
+    /// <summary>
+    /// Determine whether given 2D point lies within 
+    /// the polygon.
+    /// 
+    /// Written by Jeremy Tammik, Autodesk, 2009-09-23, 
+    /// based on code that I wrote back in 1996 in C++, 
+    /// which in turn was based on C code from the 
+    /// article "An Incremental Angle Point in Polygon 
+    /// Test" by Kevin Weiler, Autodesk, in "Graphics 
+    /// Gems IV", Academic Press, 1994.
+    /// 
+    /// Copyright (C) 2009 by Jeremy Tammik. All 
+    /// rights reserved.
+    /// 
+    /// This code may be freely used. Please preserve 
+    /// this comment.
+    /// </summary>
+    public bool PolygonContains(
+      UVArray polygon,
+      UV point )
+    {
+      // initialize
+      Quadrant quad = GetQuadrant(
+        polygon.get_Item( 0 ), point );
+
+      Quadrant angle = 0;
+
+      // loop on all vertices of polygon
+      Quadrant next_quad, delta;
+      int n = polygon.Size;
+      for( int i = 0; i < n; ++i )
+      {
+        UV vertex = polygon.get_Item( i );
+
+        UV next_vertex = polygon.get_Item(
+          ( i + 1 < n ) ? i + 1 : 0 );
+
+        // calculate quadrant and delta from last quadrant
+
+        next_quad = GetQuadrant( next_vertex, point );
+        delta = next_quad - quad;
+
+        AdjustDelta(
+          ref delta, vertex, next_vertex, point );
+
+        // add delta to total angle sum
+        angle = angle + delta;
+
+        // increment for next step
+        quad = next_quad;
+      }
+
+      // complete 360 degrees (angle of + 4 or -4 ) 
+      // means inside
+
+      return ( angle == +4 ) || ( angle == -4 );
+
+      // odd number of windings rule:
+      // if (angle & 4) return INSIDE; else return OUTSIDE;
+      // non-zero winding rule:
+      // if (angle != 0) return INSIDE; else return OUTSIDE;
+    }
+  }
 }
