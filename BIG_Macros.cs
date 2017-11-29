@@ -382,6 +382,26 @@ namespace BIG_Macros
 				t.Commit();
 			}
 		}
+		
+		
+		public void SelectHosted()
+		{	
+		    UIDocument uidoc = ActiveUIDocument;
+		    Document doc = ActiveUIDocument.Document;
+		    Selection selection = uidoc.Selection;
+		    ICollection<ElementId> selectedIds;
+
+		    Reference refHost = selection.PickObject(ObjectType.Element, "Pick Host Object");
+
+		    using(Transaction t = new Transaction(doc, "Fake"))
+		    {
+			t.Start();
+			selectedIds = doc.Delete(refHost.ElementId);
+			t.RollBack();
+		    }
+
+		    selection.SetElementIds(selectedIds);
+		}
 		public void RenameFilledRegionByTextNode()
 		{
 		    UIDocument uidoc = ActiveUIDocument;
