@@ -154,7 +154,437 @@ namespace BIG_Macros
 			
 			return s;
 		}
+		public void SetTypeParameter()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			
+			FilteredElementCollector col = new FilteredElementCollector(doc);
+			List<Element> wallTypes = col.OfCategory(BuiltInCategory.OST_Assemblies).WhereElementIsElementType().ToList();
+			
+			string message = "";
+			using (Transaction t = new Transaction(doc,"LOD_UniFormat - Elements"))
+			{
+				t.Start();
+				
+				foreach(Element element in wallTypes)
+				{			
+					if  //((element as FamilySymbol).FamilyName.IndexOf("door", StringComparison.OrdinalIgnoreCase) >= 0) 
+						//(true) 
+						(element.Name.IndexOf("panel", StringComparison.OrdinalIgnoreCase) >= 0)
+					{
+						element.LookupParameter("LOD_UniFormat").Set("B2080 - Exterior Wall Appurtenances");
+						message += element.Name + "\n";					
+					}
+				}
+				
+				t.Commit();
+			}
+			
+			TaskDialog.Show("Wall types", message);
+		}
 		
+		public void ImportedDWG()
+        {
+            Document doc = ActiveUIDocument.Document;
+            
+            FilteredElementCollector col = new FilteredElementCollector(doc)
+                .OfClass(typeof(ImportInstance));
+            
+            IList<ImportInstance> elements = col
+                .Cast<ImportInstance>()
+                .Where(x => !x.IsLinked)
+                .ToList();
+            
+            TaskDialog.Show("NumberImports", String.Format("There are {0} number of imported files", 
+                                                           elements.Count().ToString()));
+            string s = "";
+            
+            foreach(ImportInstance instance in elements)
+            {
+                s += instance.LookupParameter("Name").AsString() + " : " + instance.OwnerViewId.ToString() + Environment.NewLine;
+            }
+            TaskDialog.Show("NumberImports", String.Format("There are {0}{1}", Environment.NewLine,
+                                                           s));
+            
+            return;
+        }
+        
+        public void PurgeImportedLines()
+        {
+            Document doc = ActiveUIDocument.Document;
+            
+            string m = "";
+            
+            FilteredElementCollector col = new FilteredElementCollector(doc)
+                .OfClass(typeof(LinePatternElement));
+            
+            List<ElementId> lpeIds = col.ToElementIds().Where(x => doc.GetElement(x).Name.Contains("IMPORT")).ToList();
+            List<LinePatternElement> linePatterns = col.Cast<LinePatternElement>().Where(x => x.Name.Contains("IMPORT")).ToList();
+            
+            using (Transaction t = new Transaction(doc, "Purge imported line patterns"))
+            {
+                t.Start();
+                foreach(LinePatternElement lpe in linePatterns)
+                {
+                    m += lpe.Name + Environment.NewLine;
+                }
+                doc.Delete(lpeIds);
+                t.Commit();
+            }
+            
+            m += Environment.NewLine + String.Format(("A total of {0} imported line patterns have been removed from this project"), linePatterns.Count.ToString());
+            TaskDialog.Show("PurgeImportedLines", m);
+            return;            
+        }
+		public void ShowSubcat()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+            Document doc = ActiveUIDocument.Document;
+            
+            Categories categories = doc.Settings.Categories;
+            
+            TaskDialog.Show("SubCategories", categories.Size.ToString());
+            
+            List<Category> subcat = new List<Category>();
+            string s = "";
+            string n = "";
+            
+            foreach(Category cat in categories)
+            {
+            	var sub = getSubCategories(doc, cat, out n);
+            	if (sub != null) 
+            	{
+            		subcat.AddRange(sub);
+            	    s += n;
+            	}
+            }
+            TaskDialog.Show("SubCategories", s);
+		}
+		internal List<Category> getSubCategories(Document doc, Category cat, out string s)
+        {
+            List<Category> listCat = null;
+            var categories = cat.SubCategories;
+            s = "";
+            if(!categories.IsEmpty)
+            {
+                listCat = new List<Category>();
+                foreach (Category subCat in categories)
+                {
+                    listCat.Add(subCat);
+                    s += subCat.Name + Environment.NewLine;
+                }
+            }
+            return listCat;
+        }
+		public void RenameWallTypes()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+            Document doc = ActiveUIDocument.Document;
+            View current = doc.ActiveView;
+            
+            FilteredElementCollector collector = new FilteredElementCollector(doc);
+            FilteredElementCollector wallCollector = new FilteredElementCollector(doc);
+			
+            List<Element> wallTypes = collector.OfClass(typeof(WallType)).ToElements().ToList();
+  
+            wallTypes = wallTypes.OrderBy(z => z.Name).ToList();
+                        
+            int num = wallTypes.Count;
+            string target = "scr";
+            string replace = "SCRN";
+                       
+            using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
+            {
+            	t.Start();	                	
+	            foreach(Element wall in wallTypes)
+	            {	    
+	            	Wall w = wallCollector.OfClass(typeof(Wall)).Cast<Wall>().Where(x => x.WallType.Id == wall.Id).FirstOrDefault();
+	            	try
+	            	{
+		            	if(wall.Name.IndexOf(target, StringComparison.OrdinalIgnoreCase) >= 0)
+		            	{
+		            		string newName = String.Format("{0}_{1}_{2}","GHA",replace,(w.Width*304.8).ToString());
+		            		//TaskDialog.Show("test", newName);
+		            		wall.Name = newName;
+		            	}	            		
+	            	}
+	            	catch(Exception)
+	            	{
+	            		
+	            	}
+	            }  
+	            t.Commit();	     
+            }			            
+		}
+		public void PopulateFloors()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+            Document doc = ActiveUIDocument.Document;
+            View current = doc.ActiveView;
+            
+            FilteredElementCollector collector = new FilteredElementCollector(doc);
+			
+            List<Element> floorTypes = collector.OfClass(typeof(FloorType)).ToElements().ToList();
+            floorTypes = floorTypes.OrderBy(z => z.Name).ToList();
+                        
+            string s = "";
+            int num = floorTypes.Count;
+            
+            CurveArray crvArr = new CurveArray();
+            
+            double width = 3.0;  //horizontal offset
+            double co = 2.0;
+            
+            int length = Convert.ToInt16(Math.Ceiling(Math.Sqrt(num)));
+            
+            XYZ pickPoint = uidoc.Selection.PickPoint("Pick a starting point");
+            
+            int x = 0;
+            int y = 0;
+            
+            TextNoteOptions toptions = new TextNoteOptions();
+            toptions.TypeId = doc.GetDefaultElementTypeId(ElementTypeGroup.TextNoteType);
+            
+            using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
+            {
+            	t.Start();	            	
+            	int counter = 0;
+            	try{
+		            foreach(Element floor in floorTypes)
+		            {	           
+						FloorType fType = floor as FloorType;
+						
+						if (fType == null) continue;
+						TaskDialog.Show("test",fType.Name);
+		            	x = counter%length + 1;
+		            	y = counter/length + 1;
+		            	
+		            	XYZ pos = new XYZ(co*x*width, co*y*width,0);
+		            	pos += pickPoint;
+		            	XYZ halfLength = new XYZ(0,0,0);
+		            	
+		            	XYZ [] points = new XYZ[]{
+		            		new XYZ(-width, -width,0) + pos,
+		            		new XYZ(-width, width,0) + pos,
+		            		new XYZ(width, width,0) + pos,
+		            		new XYZ(width, -width,0) + pos,
+		            	};
+		            	
+		            	for(int i = 0; i < 4; i++)
+		            	{
+		            		Curve c  = Line.CreateBound(points[i],points[(i+1)%4]);
+		            		crvArr.Append(c);
+		            	}
+	        			
+		            	
+		            	doc.Create.NewFloor(crvArr, fType, current.GenLevel, false, new XYZ(0,0,1));
+		            	
+		            	counter ++;
+		            	s += counter.ToString();
+		            	} 
+        			}
+		            catch(Exception)
+		            {
+		            	
+		            }
+	            t.Commit();	     
+            }			            
+		}
+		public void PopulateWalls()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+            Document doc = ActiveUIDocument.Document;
+            View current = doc.ActiveView;
+            
+            FilteredElementCollector collector = new FilteredElementCollector(doc);
+			
+            List<Element> wallTypes = collector.OfClass(typeof(WallType)).ToElements().ToList();
+            wallTypes = wallTypes.OrderBy(z => z.Name).ToList();
+                        
+            string s = "";
+            int num = wallTypes.Count;
+            
+            List<CurveLoop> cloop = new List<CurveLoop>();
+            CurveLoop loop = new CurveLoop();
+            
+            double width = 3.0;  //horizontal offset
+            double height = 6.5;  //vertical offset
+            double wallLength = 5.0;
+            double wallHeight = 10.0;
+            double co = 2.0;
+            
+            int length = Convert.ToInt16(Math.Ceiling(Math.Sqrt(num)));
+            
+            XYZ pickPoint = uidoc.Selection.PickPoint("Pick a starting point");
+            
+            int x = 0;
+            int y = 0;
+            
+            TextNoteOptions toptions = new TextNoteOptions();
+            toptions.TypeId = doc.GetDefaultElementTypeId(ElementTypeGroup.TextNoteType);
+            
+            using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
+            {
+            	t.Start();	            	
+            	int counter = 0;
+            	
+	            foreach(Element wall in wallTypes)
+	            {	            	
+	            	x = counter%length + 1;
+	            	y = counter/length + 1;
+	            	
+	            	XYZ pos = new XYZ(co*x*width, co*y*height,0);
+	            	pos += pickPoint;
+	            	XYZ halfLength = new XYZ(0,wallLength,0);
+	            	
+	            	Curve c = Line.CreateBound(pos+halfLength,pos-halfLength);   
+        			
+	            	Wall.Create(doc,c,wall.Id,current.GenLevel.Id,wallHeight,0.0,false,false);
+	            	
+	            	counter ++;
+	            	s += counter.ToString();
+	            }  
+	            t.Commit();	     
+            }			            
+		}
+		public void PopulateFilledRegion()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+            Document doc = ActiveUIDocument.Document;
+            View current = doc.ActiveView;
+            
+            FilteredElementCollector collector = new FilteredElementCollector(doc);
+			
+            List<Element> filledTypes = collector.OfClass(typeof(FilledRegionType)).ToElements().ToList();
+            filledTypes = filledTypes.OrderBy(z => z.Name).ToList();
+                        
+            string s = "";
+            int num = filledTypes.Count;
+            
+            List<CurveLoop> cloop = new List<CurveLoop>();
+            CurveLoop loop = new CurveLoop();
+            
+            double width = 3.0;
+            double height = 1.5;
+            double co = 2.0;
+            
+            int length = Convert.ToInt16(Math.Ceiling(Math.Sqrt(num)));
+            int x = 0;
+            int y = 0;
+            
+            TextNoteOptions toptions = new TextNoteOptions();
+            toptions.TypeId = doc.GetDefaultElementTypeId(ElementTypeGroup.TextNoteType);            
+            
+            XYZ pickPoint = uidoc.Selection.PickPoint("Pick a starting point");
+            
+            using(Transaction t = new Transaction(doc, "FilledRegionPopulate"))
+            {
+            	t.Start();	            	
+            	int counter = 0;
+            	
+            	List<XYZ> coordinates = new List<XYZ>{
+            		new XYZ(0,0,0),
+            		new XYZ(width,0,0),
+            		new XYZ(width,height,0),
+            		new XYZ(0,height,0),
+            	};
+            	
+	            foreach(Element ft in filledTypes)
+	            {
+	            	List<Curve> curves = new List<Curve>();
+	            	
+	            	x = counter%length + 1;
+	            	y = counter/length + 1;
+	            	
+	            	XYZ pos = new XYZ(co*x*width, -co*y*height,0);
+	            	pos += pickPoint;
+	            	
+	            	Curve c = null;
+	            	
+	            	for(int i = 0; i < coordinates.Count; i++)
+	            	{
+	            		c = Line.CreateBound(coordinates[i].Add(pos),coordinates[(i+1)%(coordinates.Count)].Add(pos));
+	            		curves.Add(c);
+	            	}
+            			            		
+	            	loop = CurveLoop.Create(curves);
+        			cloop.Add(loop);
+        			
+	            	FilledRegion.Create(doc,ft.Id,current.Id,cloop);
+	            	cloop.Clear();
+	            	TextNote.Create(doc,current.Id, pos.Add(new XYZ(0,-0.2,0)), 0.1,Truncate(ft.Name, 20),toptions);
+	            	counter ++;
+	            	s += counter.ToString();
+	            }  
+	            t.Commit();	     
+            }			            
+		}
+		private string Truncate(string value, int maxLength)
+	    {
+	        if (string.IsNullOrEmpty(value)) return value;
+	        return value.Length <= maxLength ? value : value.Substring(0, maxLength)+("..");
+	    }
+		public void FamilyRename()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+            Document doc = ActiveUIDocument.Document;
+            
+            FilteredElementCollector collector = new FilteredElementCollector(doc);
+            //List<Element> famTypes = collector.OfClass(typeof(Family)).ToElements().ToList();
+            List<Element> famTypes = collector.OfClass(typeof(FilledRegionType)).ToElements().ToList();
+            
+            string s = "";
+            
+            using(Transaction t = new Transaction(doc, "FamilyRename"))
+            {
+            	try{
+	            	t.Start();
+		            foreach(Element ft in famTypes)
+		            {
+		            	if(ft.Name.Contains("wildcard"))
+		            	{
+		            		ft.Name = ft.Name.Replace("wildcard", "_GHA");
+		            		s += string.Format("{0} {1}", ft.Name, Environment.NewLine);
+		            	}		            	
+		            }  
+		            t.Commit();	            		
+            	}
+            	catch(Exception)
+            	{
+            		
+            	}
+            }
+			
+            TaskDialog.Show("test", s);
+		}		
+		public void RemoveEmptyElevMarkers()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+            Document doc = ActiveUIDocument.Document;
+            
+            FilteredElementCollector collector = new FilteredElementCollector(doc);
+            
+            IEnumerable<Element> markers = collector.
+            	WhereElementIsNotElementType().
+            	OfClass(typeof(ElevationMarker)).
+            	Cast<ElevationMarker>().
+            	Where(x => !x.HasElevations());
+            
+            int c = 0;
+            
+            using(Transaction t = new Transaction(doc,"Remove Empty Elevation Marks"))
+            {
+            	t.Start();
+            	foreach(var mark in markers.ToList())
+            	{
+            		doc.Delete(mark.Id);
+            		c++;
+            	}
+            	t.Commit();
+            }
+            
+            TaskDialog.Show("Success", String.Format("Successfully removed {0} unused Elevation Markers", c.ToString()));
+		}
 		public void BulkReloadLinks()
 		{
 			UIApplication uiApp = this;
