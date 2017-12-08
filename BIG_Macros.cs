@@ -2178,7 +2178,53 @@ namespace BIG_Macros
 					}
 					*/
 			}
-		}		
+		}
+		public void AlignViews()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			Selection sel = this.ActiveUIDocument.Selection;
+			
+			Viewport vp = doc.GetElement(sel.PickObject(ObjectType.Element, "Pick View to Align To")) as Viewport;
+			
+			if(vp == null) 
+			{
+				TaskDialog.Show("Error", "That's not a View");
+				return;
+			}
+						
+			XYZ loc = vp.GetBoxCenter();
+			
+			List<ViewSheet> viewSheets = new FilteredElementCollector(doc)
+				.OfClass(typeof(ViewSheet))
+				.WhereElementIsNotElementType()
+				.Cast<ViewSheet>()
+				.ToList();
+			
+			List<Viewport> viewPorts = new List<Viewport>();
+			
+			foreach(ViewSheet sheet in viewSheets)
+			{
+				List<Viewport> ports = sheet.GetAllViewports()
+					.Select<ElementId, Viewport>(
+						id => doc.GetElement(id) as Viewport)
+					.ToList<Viewport>();
+				
+				viewPorts.AddRange(ports);
+			}
+			
+			viewPorts = viewPorts.Where(x => x.LookupParameter("View Name").AsString().Contains("GA")).ToList();
+			
+			using(Transaction t = new Transaction(doc, "Align Views"))
+			{
+				t.Start();
+				foreach(Viewport v in viewPorts)
+				{
+					XYZ delta = loc - v.GetBoxCenter();
+					ElementTransformUtils.MoveElement(doc, v.Id, delta);
+				}
+				t.Commit();
+			}
+		}
 		public void FamilyTypeCreate()
 		{
 			Document doc = this.ActiveUIDocument.Document;
