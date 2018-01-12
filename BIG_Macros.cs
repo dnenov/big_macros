@@ -1117,7 +1117,60 @@ namespace BIG_Macros
 
 			return filename;			
 		}
-		
+		public void PDFMultipleDocuments()
+		{			
+			OpenFileDialog theDialogRevit = new OpenFileDialog();
+			theDialogRevit.Title = "Select Revit Project Files";
+			theDialogRevit.Filter = "RVT files|*.rvt";
+			theDialogRevit.FilterIndex = 1;
+			theDialogRevit.Multiselect = true;
+			
+			OpenOptions opt = new OpenOptions();
+            opt.DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets;
+            opt.Audit = false;
+            
+			if (theDialogRevit.ShowDialog() == DialogResult.OK)
+			{
+                foreach (String projectPath in theDialogRevit.FileNames)
+                {
+                 	FileInfo filePath = new FileInfo(projectPath);
+                 	string filename = filePath.Name;
+                    ModelPath mp = ModelPathUtils.ConvertUserVisiblePathToModelPath(filePath.FullName);					
+		            WorksetConfiguration wc = new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets);
+		            
+		            try{
+			            Document doc = Application.OpenDocumentFile(mp,opt);
+			            PrintViewSets(doc);
+			            doc.Close(false);		            	
+		            }
+		            catch(Exception)
+		            {
+		            	
+		            }
+                }
+			}
+		}
+		private void PrintViewSets(Document doc)
+		{
+			List<ViewSheetSet> viewSets = new FilteredElementCollector(doc).OfClass(typeof(ViewSheetSet)).Cast<ViewSheetSet>().ToList();			
+
+			// No ViewSets No Game			
+			if(viewSets.Count == 0) 
+			{
+				TaskDialog.Show("Error", String.Format("No ViewSets in {0} found.", doc.Title));
+				return;
+			}
+			
+			foreach(ViewSheetSet vset in viewSets)
+			{
+				using (Transaction t = new Transaction(doc, "Print Test"))
+				{
+					t.Start();
+					doc.Print(vset.Views);				
+					t.Commit();
+				}				
+			}			
+		}
 		public void CreateWorksets()
 		{
 			UIDocument uidoc = ActiveUIDocument;
