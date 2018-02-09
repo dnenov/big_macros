@@ -2605,6 +2605,53 @@ namespace BIG_Macros
             }
             return -angle;
         }
+	public void SelectRoomBoundingElements()
+	{
+		UIDocument uidocument = this.ActiveUIDocument;
+		Document doc = this.ActiveUIDocument.Document;
+		Selection sel = this.ActiveUIDocument.Selection;
+
+		ICollection<ElementId> joinedElements = new Collection<ElementId>(); // collection to store the walls joined to the selected wall
+
+		Room room = doc.GetElement(sel.PickObject(ObjectType.Element, "Pick the Room").ElementId) as Room;
+
+		SpatialElementBoundaryOptions sebOptions = new SpatialElementBoundaryOptions();			
+
+		var boundaries = room.GetBoundarySegments(sebOptions);
+
+		foreach(var boundary in boundaries)
+		{
+			foreach(var segment in boundary)
+			{
+				joinedElements.Add(segment.ElementId);
+			}					
+		}
+
+		uidocument.Selection.SetElementIds(joinedElements); // select all of the joined elements
+	}
+	public void RenameGrids()
+	{
+		Document doc = this.ActiveUIDocument.Document;
+		Selection sel = this.ActiveUIDocument.Selection;
+
+		List<Grid> grids = sel.PickObjects(ObjectType.Element, "Pick Grids").Select<Reference, Grid>(
+			x => doc.GetElement(x.ElementId) as Grid)
+			.ToList<Grid>();
+
+		if(grids.Count == 0) TaskDialog.Show("Error", "No grids selected");
+
+		using(Transaction t = new Transaction(doc, "Grids Rename"))
+		{
+			int counter = 1;
+			t.Start();
+			foreach(Grid g in grids)
+			{
+				g.Name = String.Format("F{0}", counter.ToString());
+				counter ++;
+			}				
+			t.Commit();
+		}
+	}	
         public void PurgeImportedLines()
         {
             Document doc = ActiveUIDocument.Document;
