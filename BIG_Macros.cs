@@ -2942,6 +2942,162 @@ namespace BIG_Macros
 		    message += String.Format("{0}The mark values of overall {1} Elements changed.", Environment.NewLine, ids.Count.ToString());
 			TaskDialog.Show("DeleteAreaLines", message);			
 		}
+		public void SelectRoomBoundingElements()
+		{
+			UIDocument uidocument = this.ActiveUIDocument;
+			Document doc = this.ActiveUIDocument.Document;
+			Selection sel = this.ActiveUIDocument.Selection;
+			
+			ICollection<ElementId> joinedElements = new Collection<ElementId>(); // collection to store the walls joined to the selected wall
+			
+			Room room = doc.GetElement(sel.PickObject(ObjectType.Element, "Pick the Room").ElementId) as Room;
+			
+			SpatialElementBoundaryOptions sebOptions = new SpatialElementBoundaryOptions();			
+			
+			var boundaries = room.GetBoundarySegments(sebOptions);
+			
+			foreach(var boundary in boundaries)
+			{
+				foreach(var segment in boundary)
+				{
+					joinedElements.Add(segment.ElementId);
+				}					
+			}
+			
+			uidocument.Selection.SetElementIds(joinedElements); // select all of the joined elements
+		}
+		public void FindLegendsOnSheets()
+		{
+			UIDocument uidocument = this.ActiveUIDocument;
+			Document doc = this.ActiveUIDocument.Document;
+			
+			string legendName = Prompt.ShowDialog("Which Legend?", "o.O");
+			
+			List<ViewSheet> sheetList = new FilteredElementCollector(doc)
+				.WhereElementIsNotElementType()
+				.OfClass(typeof(ViewSheet))
+				.Cast<ViewSheet>()
+				.ToList();
+			
+			string s = "";
+			
+			foreach(var sheet in sheetList)
+			{
+				var placedViews = sheet.GetAllPlacedViews();
+				
+				if(placedViews.Count == 0) continue;
+				
+				foreach(var view in placedViews)
+				{
+					Autodesk.Revit.DB.View v = doc.GetElement(view) as Autodesk.Revit.DB.View;
+					if(v.ViewType != ViewType.Legend) continue;
+					if(v.Name.Equals(legendName)) s += sheet.SheetNumber + " - " + sheet.Name + Environment.NewLine;
+				}
+			}
+			
+			TaskDialog.Show("Results", s);			
+		}		
+		internal static class Prompt
+		{
+		    public static string ShowDialog(string text, string caption)
+		    {
+		        System.Windows.Forms.Form prompt = new System.Windows.Forms.Form()
+		        {
+		            Width = 500,
+		            Height = 150,
+		            FormBorderStyle = FormBorderStyle.FixedDialog,
+		            Text = caption,
+		            StartPosition = FormStartPosition.CenterScreen
+		        };
+		        Label textLabel = new Label() { Left = 50, Top=20, Text=text };
+		        System.Windows.Forms.TextBox textBox = new System.Windows.Forms.TextBox() { Left = 50, Top=40, Width=400 };
+		        Button confirmation = new Button() { Text = "Ok", Left=350, Width=100, Top=70, DialogResult = DialogResult.OK };
+		        confirmation.Click += (sender, e) => { prompt.Close(); };
+		        prompt.Controls.Add(textBox);
+		        prompt.Controls.Add(confirmation);
+		        prompt.Controls.Add(textLabel);
+		        prompt.AcceptButton = confirmation;
+		
+		        return prompt.ShowDialog() == DialogResult.OK ? textBox.Text : "";
+		    }
+		}
+		public void RenameGrids()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			Selection sel = this.ActiveUIDocument.Selection;
+			
+			List<Grid> grids = sel.PickObjects(ObjectType.Element, "Pick Grids").Select<Reference, Grid>(
+				x => doc.GetElement(x.ElementId) as Grid)
+				.ToList<Grid>();
+			
+			if(grids.Count == 0) TaskDialog.Show("Error", "No grids selected");
+			
+			using(Transaction t = new Transaction(doc, "Grids Rename"))
+			{
+				int counter = 1;
+				t.Start();
+				foreach(Grid g in grids)
+				{
+					g.Name = String.Format("F{0}", counter.ToString());
+					counter ++;
+				}				
+				t.Commit();
+			}
+		}
+		public void PDFMultipleDocuments()
+		{			
+			OpenFileDialog theDialogRevit = new OpenFileDialog();
+			theDialogRevit.Title = "Select Revit Project Files";
+			theDialogRevit.Filter = "RVT files|*.rvt";
+			theDialogRevit.FilterIndex = 1;
+			theDialogRevit.Multiselect = true;
+			
+			OpenOptions opt = new OpenOptions();
+            opt.DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets;
+            opt.Audit = false;
+            
+			if (theDialogRevit.ShowDialog() == DialogResult.OK)
+			{
+                foreach (String projectPath in theDialogRevit.FileNames)
+                {
+                 	FileInfo filePath = new FileInfo(projectPath);
+                 	string filename = filePath.Name;
+                    ModelPath mp = ModelPathUtils.ConvertUserVisiblePathToModelPath(filePath.FullName);					
+		            WorksetConfiguration wc = new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets);
+		            
+		            try{
+			            Document doc = Application.OpenDocumentFile(mp,opt);
+			            PrintViewSets(doc);
+			            doc.Close(false);		            	
+		            }
+		            catch(Exception)
+		            {
+		            	
+		            }
+                }
+			}
+		}
+		private void PrintViewSets(Document doc)
+		{
+			List<ViewSheetSet> viewSets = new FilteredElementCollector(doc).OfClass(typeof(ViewSheetSet)).Cast<ViewSheetSet>().ToList();			
+
+			// No ViewSets No Game			
+			if(viewSets.Count == 0) 
+			{
+				TaskDialog.Show("Error", String.Format("No ViewSets in {0} found.", doc.Title));
+				return;
+			}
+			
+			foreach(ViewSheetSet vset in viewSets)
+			{
+				using (Transaction t = new Transaction(doc, "Print Test"))
+				{
+					t.Start();
+					doc.Print(vset.Views);				
+					t.Commit();
+				}				
+			}			
+		}
 		public void ElementToWorkset()
 		{			
 			UIDocument uidoc = this.ActiveUIDocument;
@@ -2989,7 +3145,7 @@ namespace BIG_Macros
 			}
 			
 			FilteredWorksetCollector worksetCollector = new FilteredWorksetCollector(doc);
-            List<Workset> worksets = worksetCollector.OfKind(WorksetKind.UserWorkset).ToList();
+            		List<Workset> worksets = worksetCollector.OfKind(WorksetKind.UserWorkset).ToList();
             
 			WorksetId worksetId = null;
 			
