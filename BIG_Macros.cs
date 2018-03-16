@@ -1436,7 +1436,120 @@ namespace BIG_Macros
 	        //show the level information in the messagebox
 	        TaskDialog.Show("Revit",levelInformation.ToString());
 		}	
-		
+		public void DuplicateSheetMultipleTimes()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			Selection sel = this.ActiveUIDocument.Selection;			
+			
+			ViewSheet duplicateSheet = SheetToDuplicate(doc);
+			
+			int times = 0;
+			Int32.TryParse(Prompt.ShowDialog("Which Sheet Number?", "o.O"), out times);	//sheet number is unique, whereas its name is not
+			
+			for(int i = 0; i < times; i++)
+			{				
+				ViewSheet newSheet = DuplicateViewSheet(doc, i.ToString(), duplicateSheet);
+			}			
+		}
+		public void DuplicateSheet()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			Selection sel = this.ActiveUIDocument.Selection;
+						
+			ViewSheet duplicateSheet = SheetToDuplicate(doc);
+			ViewSheet newSheet = DuplicateViewSheet(doc, "_1", duplicateSheet);
+			
+			var placedViews = duplicateSheet.GetAllViewports();			
+			
+			Dictionary<Autodesk.Revit.DB.View, XYZ> viewsOnSheet = new Dictionary<Autodesk.Revit.DB.View, XYZ>();					
+									
+			foreach(var view in placedViews)
+			{
+				Viewport vport = doc.GetElement(view) as Viewport;
+				Autodesk.Revit.DB.View v = doc.GetElement(vport.ViewId) as Autodesk.Revit.DB.View;
+				
+				if(v.ViewType == ViewType.Legend) 
+				{
+					viewsOnSheet.Add(v, vport.GetBoxCenter());
+				}				
+				else
+				{
+					viewsOnSheet.Add(DuplicateView(doc, v), vport.GetBoxCenter());
+				}
+			}
+						
+			if(newSheet == null) 
+			{
+				TaskDialog.Show("Error", "Something Failed");
+				return;
+			}
+			
+			using(Transaction t = new Transaction(doc, "Add Views On Sheet"))
+			{
+				t.Start();
+				foreach(var v in viewsOnSheet)
+				{
+					if(Viewport.CanAddViewToSheet(doc, newSheet.Id, v.Key.Id))
+					{
+						Viewport.Create(doc, newSheet.Id, v.Key.Id, v.Value);
+					}
+				}
+				t.Commit();
+			}
+			
+		}
+		internal ViewSheet SheetToDuplicate(Document doc)
+		{	
+			string sheetNumber = Prompt.ShowDialog("Which Sheet Number?", "o.O");	//sheet number is unique, whereas its name is not
+			
+			ViewSheet duplicateSheet = new FilteredElementCollector(doc)
+				.WhereElementIsNotElementType()
+				.OfClass(typeof(ViewSheet))
+				.Cast<ViewSheet>()
+				.First(x => x.SheetNumber.Equals(sheetNumber));
+			
+			return duplicateSheet;
+		}
+		internal ViewSheet DuplicateViewSheet(Document doc, string increment, ViewSheet duplicateSheet)
+		{
+			
+			ElementId tblock = null;
+			
+			foreach (var element in new FilteredElementCollector(doc, duplicateSheet.Id))
+			{
+				if(element.Category.Name.ToString().Equals("Title Blocks"))
+				{
+					tblock = element.GetTypeId();
+				}
+			}	
+			
+			ViewSheet newSheet = null;
+			
+			using(Transaction t = new Transaction(doc, "Duplicate Sheet"))
+			{
+				t.Start();				
+				newSheet = ViewSheet.Create(doc, tblock);
+				newSheet.Name = duplicateSheet.Name;
+				newSheet.SheetNumber = duplicateSheet.SheetNumber + increment;
+				newSheet.LookupParameter("Sheet Group").Set(duplicateSheet.LookupParameter("Sheet Group").AsString());
+				t.Commit();				
+			}
+			
+			return newSheet;
+		}
+		internal Autodesk.Revit.DB.View DuplicateView(Document doc, Autodesk.Revit.DB.View v)
+		{
+			Autodesk.Revit.DB.View duplicate = null;
+			
+			using(Transaction t = new Transaction(doc, "Duplicate View"))
+			{
+				t.Start();
+				duplicate = doc.GetElement(v.Duplicate(ViewDuplicateOption.Duplicate)) as Autodesk.Revit.DB.View;
+				t.Commit();
+			}			
+			
+			return duplicate;
+		}
 		public void DuplicateViewsByParamter()
 		{
 			UIDocument uidoc = ActiveUIDocument;
