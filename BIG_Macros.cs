@@ -208,7 +208,52 @@ namespace BIG_Macros
             
             return;
         }
-        
+        public void CreateWorksetView()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			ElementId viewTypeId = FindViewTypes(doc, ViewType.ThreeD);
+			
+			TaskDialog.Show("Test", viewTypeId.ToString());
+			
+			List<Workset> workCollector = new FilteredWorksetCollector(doc)
+				.OfKind(WorksetKind.UserWorkset)
+				.Cast<Workset>()
+				.ToList();
+				
+			using(Transaction t = new Transaction(doc, "Create 3D View per Workset"))
+			{
+				t.Start();
+				foreach(var workset in workCollector)
+				{
+					string name = workset.Name;
+					Autodesk.Revit.DB.View v = View3D.CreateIsometric(doc, viewTypeId);
+					v.Name = "WORKSET VIEW - " + name;
+					SetWorksetVisibility(v, workset, workCollector);
+				}
+								
+				t.Commit();
+			}
+		}
+		internal void SetWorksetVisibility(Autodesk.Revit.DB.View view, Workset workset, List<Workset> workCollector)
+		{
+			foreach(var w in workCollector)
+			{
+				if(w == workset)
+				{
+					view.SetWorksetVisibility(w.Id, WorksetVisibility.Visible);
+				}
+				else{
+					view.SetWorksetVisibility(w.Id, WorksetVisibility.Hidden);
+				}
+			}
+		}
+		internal ElementId FindViewTypes(Document doc, ViewType type)
+		{
+			var viewFamilyType = new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>()
+                          .FirstOrDefault(x => x.ViewFamily ==  ViewFamily.ThreeDimensional);
+			    
+		    return viewFamilyType.Id;
+		}
         public void PurgeImportedLines()
         {
             Document doc = ActiveUIDocument.Document;
