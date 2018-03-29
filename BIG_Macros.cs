@@ -1481,79 +1481,87 @@ namespace BIG_Macros
 	        //show the level information in the messagebox
 	        TaskDialog.Show("Revit",levelInformation.ToString());
 		}	
-		public void DuplicateSheetMultipleTimes()
+		
+		public void DuplicateSheet()
 		{
 			Document doc = this.ActiveUIDocument.Document;
 			Selection sel = this.ActiveUIDocument.Selection;			
 			
-			ViewSheet duplicateSheet = SheetToDuplicate(doc);
+			//ViewSheet duplicateSheet = SheetToDuplicate(doc);
+			
+			List<ViewSheet> sheetsToDuplicate = SheetToDuplicateFromSelection(this.ActiveUIDocument);
 			
 			int times = 0;
-			Int32.TryParse(Prompt.ShowDialog("Which Sheet Number?", "o.O"), out times);	//sheet number is unique, whereas its name is not
-			
-			for(int i = 0; i < times; i++)
-			{				
-				ViewSheet newSheet = DuplicateViewSheet(doc, i.ToString(), duplicateSheet);
-			}			
+			//Int32.TryParse(Prompt.ShowDialog("Which Sheet Number?", "o.O"), out times);	//sheet number is unique, whereas its name is not
+			using(TransactionGroup tgroup = new TransactionGroup(doc, "Duplicate Sheets"))
+			{
+				tgroup.Start();
+				foreach(var sheet in sheetsToDuplicate)
+				{	
+					times ++;				
+					ViewSheet newSheet = DuplicateViewSheet(doc, times.ToString(), sheet);
+				}		
+				tgroup.Assimilate();
+			}
 		}
-		public void DuplicateSheet()
+		public void DuplicateSheetAndViews()
 		{
 			Document doc = this.ActiveUIDocument.Document;
 			Selection sel = this.ActiveUIDocument.Selection;
-						
-			ViewSheet duplicateSheet = SheetToDuplicate(doc);
-			ViewSheet newSheet = DuplicateViewSheet(doc, "_1", duplicateSheet);
 			
-			var placedViews = duplicateSheet.GetAllViewports();			
+			int counter = 0;		
 			
-			Dictionary<Autodesk.Revit.DB.View, XYZ> viewsOnSheet = new Dictionary<Autodesk.Revit.DB.View, XYZ>();					
-									
-			foreach(var view in placedViews)
+//			ViewSheet duplicateSheet = SheetToDuplicate(doc);
+			
+			List<ViewSheet> sheetsToDuplicate = SheetToDuplicateFromSelection(this.ActiveUIDocument);			
+			using(TransactionGroup tgroup = new TransactionGroup(doc, "Duplicate Sheets"))
 			{
-				Viewport vport = doc.GetElement(view) as Viewport;
-				Autodesk.Revit.DB.View v = doc.GetElement(vport.ViewId) as Autodesk.Revit.DB.View;
+				tgroup.Start();
+				foreach(var sheet in sheetsToDuplicate)
+				{
+					ViewSheet newSheet = DuplicateViewSheet(doc, "_" + counter.ToString(), sheet);
 				
-				if(v.ViewType == ViewType.Legend) 
-				{
-					viewsOnSheet.Add(v, vport.GetBoxCenter());
-				}				
-				else
-				{
-					viewsOnSheet.Add(DuplicateView(doc, v), vport.GetBoxCenter());
-				}
-			}
-						
-			if(newSheet == null) 
-			{
-				TaskDialog.Show("Error", "Something Failed");
-				return;
-			}
-			
-			using(Transaction t = new Transaction(doc, "Add Views On Sheet"))
-			{
-				t.Start();
-				foreach(var v in viewsOnSheet)
-				{
-					if(Viewport.CanAddViewToSheet(doc, newSheet.Id, v.Key.Id))
+					var placedViews = sheet.GetAllViewports();			
+					
+					Dictionary<Autodesk.Revit.DB.View, XYZ> viewsOnSheet = new Dictionary<Autodesk.Revit.DB.View, XYZ>();					
+											
+					foreach(var view in placedViews)
 					{
-						Viewport.Create(doc, newSheet.Id, v.Key.Id, v.Value);
+						Viewport vport = doc.GetElement(view) as Viewport;
+						Autodesk.Revit.DB.View v = doc.GetElement(vport.ViewId) as Autodesk.Revit.DB.View;
+						
+						if(v.ViewType == ViewType.Legend) 
+						{
+							viewsOnSheet.Add(v, vport.GetBoxCenter());
+						}				
+						else
+						{
+							viewsOnSheet.Add(DuplicateView(doc, v), vport.GetBoxCenter());
+						}
 					}
+								
+					if(newSheet == null) 
+					{
+						TaskDialog.Show("Error", "Something Failed");
+						return;
+					}
+					
+					using(Transaction t = new Transaction(doc, "Add Views On Sheet"))
+					{
+						t.Start();
+						foreach(var v in viewsOnSheet)
+						{
+							if(Viewport.CanAddViewToSheet(doc, newSheet.Id, v.Key.Id))
+							{
+								Viewport.Create(doc, newSheet.Id, v.Key.Id, v.Value);
+							}
+						}
+						t.Commit();
+					}
+					counter ++;
 				}
-				t.Commit();
-			}
-			
-		}
-		internal ViewSheet SheetToDuplicate(Document doc)
-		{	
-			string sheetNumber = Prompt.ShowDialog("Which Sheet Number?", "o.O");	//sheet number is unique, whereas its name is not
-			
-			ViewSheet duplicateSheet = new FilteredElementCollector(doc)
-				.WhereElementIsNotElementType()
-				.OfClass(typeof(ViewSheet))
-				.Cast<ViewSheet>()
-				.First(x => x.SheetNumber.Equals(sheetNumber));
-			
-			return duplicateSheet;
+				tgroup.Assimilate();
+			}			
 		}
 		internal ViewSheet DuplicateViewSheet(Document doc, string increment, ViewSheet duplicateSheet)
 		{
@@ -1582,6 +1590,24 @@ namespace BIG_Macros
 			
 			return newSheet;
 		}
+		internal ViewSheet SheetToDuplicate(Document doc)
+		{	
+			string sheetNumber = Prompt.ShowDialog("Which Sheet Number?", "o.O");	//sheet number is unique, whereas its name is not
+			
+			ViewSheet duplicateSheet = new FilteredElementCollector(doc)
+				.WhereElementIsNotElementType()
+				.OfClass(typeof(ViewSheet))
+				.Cast<ViewSheet>()
+				.First(x => x.SheetNumber.Equals(sheetNumber));
+			
+			return duplicateSheet;
+		}
+		internal List<ViewSheet> SheetToDuplicateFromSelection(UIDocument uidoc)
+		{	
+			var selectedSheets = uidoc.Selection.GetElementIds().Select(x => uidoc.Document.GetElement(x) as ViewSheet).ToList();
+						
+			return selectedSheets;
+		}
 		internal Autodesk.Revit.DB.View DuplicateView(Document doc, Autodesk.Revit.DB.View v)
 		{
 			Autodesk.Revit.DB.View duplicate = null;
@@ -1595,6 +1621,7 @@ namespace BIG_Macros
 			
 			return duplicate;
 		}
+		
 		public void DuplicateViewsByParamter()
 		{
 			UIDocument uidoc = ActiveUIDocument;
