@@ -435,6 +435,39 @@ namespace BIG_Macros
 	            t.Commit();	     
             }			            
 		}
+		public void AssignViewType()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			
+			List<ViewSheet> sheets = new FilteredElementCollector(doc)
+				.OfClass(typeof(ViewSheet))
+				.Cast<ViewSheet>()
+				.Where(x => x.LookupParameter("Planart").HasValue 
+				       && x.LookupParameter("Planart").AsString().Contains("70-Leitdetails"))
+				.ToList();
+			
+			var vpp = new FilteredElementCollector(doc).OfClass(typeof(Viewport))
+				.Cast<Viewport>()
+				.Where(x => x.Name.Equals("Detail Section - Titlebar BIG")).First();
+						
+			using(Transaction t = new Transaction(doc, "changenames"))
+			{
+				t.Start();
+				foreach(ViewSheet vs in sheets)
+				{
+					var viewports = vs.GetAllViewports();
+					if(viewports.Count > 0)
+					{
+						foreach(ElementId vId in viewports)
+						{
+							Viewport vp = doc.GetElement(vId) as Viewport;
+							vp.get_Parameter(BuiltInParameter.ELEM_FAMILY_AND_TYPE_PARAM).Set(vpp.GetTypeId());
+						}
+					}
+				}				
+				t.Commit();
+			}
+		}
 		public void PopulateWalls()
 		{
 			UIDocument uidoc = ActiveUIDocument;
