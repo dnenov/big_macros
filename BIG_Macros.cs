@@ -716,13 +716,13 @@ namespace BIG_Macros
 			
 			List<RevitLinkType> links = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkType)).Cast<RevitLinkType>().ToList();
 			
-			OpenFileDialog theDialogRevit = new OpenFileDialog();
+			System.Windows.Forms.OpenFileDialog theDialogRevit = new System.Windows.Forms.OpenFileDialog();
 			theDialogRevit.Title = "Select Revit Project Files";
 			theDialogRevit.Filter = "RVT files|*.rvt";
 			theDialogRevit.FilterIndex = 1;
 			theDialogRevit.Multiselect = true;
 			
-			if (theDialogRevit.ShowDialog() == DialogResult.OK)
+			if (theDialogRevit.ShowDialog() == System.Windows.Forms.DialogResult.OK)
 			{
                 foreach (String projectPath in theDialogRevit.FileNames)
                 {
@@ -731,10 +731,11 @@ namespace BIG_Macros
                     ModelPath mp = ModelPathUtils.ConvertUserVisiblePathToModelPath(filePath.FullName);					
 		            WorksetConfiguration wc = new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets);
 		            
-		            RevitLinkType link = links.FirstOrDefault(x => x.Name.Equals(filename));
+		            RevitLinkType link = links.FirstOrDefault(x => x.Name.Equals(filename) && x.GetParentId().IntegerValue == -1);
+		            
 		            if(link != null)
 		            {
-		            	link.LoadFrom(mp, wc);
+		            	link.LoadFrom(mp, wc);	
 		            }
                 }
 			}
