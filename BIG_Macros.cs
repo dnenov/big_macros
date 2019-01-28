@@ -360,10 +360,45 @@ namespace BIG_Macros
 	            }  
 	            t.Commit();	     
             }			            
-		}
-		public void PopulateFloors()
+	}	
+	public void DuplicateNumberValues()
+	{
+		Document doc = this.ActiveUIDocument.Document;
+		Selection selection = this.ActiveUIDocument.Selection;
+		List<ElementId> ids = selection.GetElementIds().ToList();
+
+		List<int> numbers = new FilteredElementCollector(doc)
+			.OfCategoryId(doc.GetElement(ids.First()).Category.Id)
+			.WhereElementIsNotElementType()
+			.Select(x => int.Parse(x.LookupParameter("Number").AsString()))
+			.ToList();
+
+		List<int> result = Enumerable.Range(0, numbers.Max()).Except(numbers).ToList();
+
+		using(Transaction t = new Transaction(doc, "Duplicating Number Elements"))
 		{
-			UIDocument uidoc = ActiveUIDocument;
+			t.Start();				
+			foreach(ElementId id in ids)
+			{
+				int number = 0;
+				Element el = doc.GetElement(id);
+				Parameter param = el.LookupParameter("Number");
+
+				Int32.TryParse(param.AsString(), out number);
+				if(number != 0)
+				{
+					number = result[0];
+					param.Set(number.ToString());
+					result.RemoveAt(0);
+				}
+			}
+			t.Commit();
+		}
+
+	}
+	public void PopulateFloors()
+	{
+	    UIDocument uidoc = ActiveUIDocument;
             Document doc = ActiveUIDocument.Document;
             View current = doc.ActiveView;
             
