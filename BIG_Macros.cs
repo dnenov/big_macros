@@ -115,9 +115,404 @@ namespace BIG_Macros
 			this.Shutdown += new System.EventHandler(Module_Shutdown);
 		}
 		#endregion
-				public void CollectElementIDs()
+			
+			
+#region Macros
+
+		public void OpenViewFromViewTemplate()
 		{
-		 	UIDocument uidoc = ActiveUIDocument;
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = uidoc.Document;
+			
+			var tempalteId = new FilteredElementCollector(doc)
+				.OfClass(typeof(View))
+				.Cast<View>()
+				.Where(x => x.IsTemplate)
+				.First(x => x.Name.Equals("BIG_Section 1_50"))
+				.Id;
+			
+			var views = new FilteredElementCollector(doc)
+				.OfClass(typeof(View))
+				.Cast<View>()
+				.Where(x => x.ViewTemplateId.IntegerValue == tempalteId.IntegerValue)
+				.ToList();
+			
+			foreach(var v in views)
+			{
+				uidoc.ActiveView = v;
+			}
+		}
+		public void DuplicateNumberValues()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			Selection selection = this.ActiveUIDocument.Selection;
+			List<ElementId> ids = selection.GetElementIds().ToList();
+			
+			List<int> numbers = new FilteredElementCollector(doc)
+				.OfCategoryId(doc.GetElement(ids.First()).Category.Id)
+				.WhereElementIsNotElementType()
+				.Select(x => int.Parse(x.LookupParameter("Number").AsString()))
+				.ToList();
+			
+			List<int> result = Enumerable.Range(0, numbers.Max()).Except(numbers).ToList();
+			
+			using(Transaction t = new Transaction(doc, "Duplicating Number Elements"))
+			{
+				t.Start();				
+				foreach(ElementId id in ids)
+				{
+					int number = 0;
+					Element el = doc.GetElement(id);
+					Parameter param = el.LookupParameter("Number");
+					
+					Int32.TryParse(param.AsString(), out number);
+					if(number != 0)
+					{
+						number = result[0];
+						param.Set(number.ToString());
+						result.RemoveAt(0);
+					}
+				}
+				t.Commit();
+			}
+			
+		}
+		public void SetWorksets()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			
+			// Select all elements of the correct category
+			var elements = new FilteredElementCollector(doc)
+				.OfCategory(BuiltInCategory.OST_RoomSeparationLines)
+				.ToElements();
+			
+			// Select Workset integer value
+			var workset = new FilteredWorksetCollector(doc)
+				.OfKind(WorksetKind.UserWorkset)
+				.Where(x => x.Name.Equals("X - Admin"))
+				.Select(w => w.Id.IntegerValue)
+				.First();
+			
+			using(Transaction t = new Transaction(doc, "Set Worksets"))
+			{
+				t.Start();
+				foreach(Element el in elements)
+				{
+					el.LookupParameter("Workset").Set(workset);
+				}
+				t.Commit();
+			}
+		}
+		public void OffAxis()
+		{
+            Document doc = this.ActiveUIDocument.Document;			
+			Selection selection = this.ActiveUIDocument.Selection;
+			
+//			List<ElementId> ids = selection.PickObjects(ObjectType.Element, "Pick Axis to fix").ToList().Select(x => x.ElementId).ToList();
+			List<ElementId> ids = selection.GetElementIds().ToList();
+			foreach(ElementId id in ids)
+			{
+				Fix(id);
+			}
+		}
+		
+	    private void Fix(ElementId id)
+        {            
+            Document doc = this.ActiveUIDocument.Document;
+                        
+//			  Curve locationLine = (doc.GetElement(id) as Grid).Curve;
+                        
+            ModelLine modelLine = doc.GetElement(id) as ModelLine;         
+            Curve locationLine = modelLine.GeometryCurve;
+
+//            Wall wall = doc.GetElement(id) as Wall;
+//            Curve locationLine = (wall.Location as LocationCurve).Curve;
+			/*
+            // mini procedure to make sure rotation a line doesn't drag other lines with it
+            if(doc.GetElement(id).Name.Equals("Model Lines"))
+            {
+                ElementArray empty = locationLine.get_ElementsAtJoin(0);
+                using (Transaction temp = new Transaction(doc, "Temporary cut joined element"))
+                {
+                    temp.Start();
+                    temp.Commit();
+                }
+            }
+			*/
+            double rotation = getRotation(locationLine);
+
+            Line axis = getAxis(locationLine);
+
+            using (Transaction t = new Transaction(doc, "Rotate off axis element."))
+            {
+                t.Start();
+                ElementTransformUtils.RotateElement(doc, id, axis, (rotation));
+                t.Commit();
+            }
+        }
+		/// <summary>
+        ///  Get Axis of rotation (Z) of line
+        /// </summary>
+        /// <param name="locationLine"></param>
+        /// <returns></returns>
+        private Line getAxis(Curve locationLine)
+        {
+            XYZ basePoint = locationLine.GetEndPoint(0);
+            XYZ direction = (locationLine as Line).Direction;
+            XYZ cross = XYZ.BasisY.CrossProduct(direction).Normalize();
+            return cross.IsZeroLength() ? null : Line.CreateBound(basePoint, cross+basePoint);
+        }
+        /// <summary>
+        ///  Get Axis of rotation (Z) of plane
+        /// </summary>
+        /// <param name="locationLine"></param>
+        /// <returns></returns>
+        private Line getAxis(Plane plane)
+        {
+            XYZ basePoint = plane.Origin;
+            XYZ direction = plane.XVec;
+            XYZ cross = XYZ.BasisY.CrossProduct(direction).Normalize();
+            return cross.IsZeroLength() ? null : Line.CreateBound(basePoint, cross + basePoint);
+        }
+        /// <summary>
+        /// Get rotation angle of line
+        /// </summary>
+        /// <param name="locationLine"></param>
+        /// <returns></returns>
+        private double getRotation(Curve locationLine)
+        {
+            Line line = locationLine as Line;
+            double angle = XYZ.BasisY.AngleTo(line.Direction);
+            if (angle > 0)
+            {
+                while (angle > 0.01)
+                {
+                    angle -= Math.PI / 4;
+                }
+            }
+            else
+            {
+                while (angle < -0.01)
+                {
+                    angle += Math.PI / 4;
+                }
+            }
+            return -angle;
+        }
+		public void ToggleLevelBubbules()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			Selection sel = this.ActiveUIDocument.Selection;
+						
+			try{
+				do
+				{
+					Level lvl = doc.GetElement(sel.PickObject(ObjectType.Element, "Pick View to Align To")) as Level;
+					
+					bool end0 = lvl.IsBubbleVisibleInView(DatumEnds.End0, doc.ActiveView);
+					bool end1 = lvl.IsBubbleVisibleInView(DatumEnds.End1, doc.ActiveView);
+					
+					using(Transaction t = new Transaction(doc, "toggle"))
+					{
+						t.Start();
+						if(end0 && end1)
+						{
+							lvl.HideBubbleInView(DatumEnds.End1,doc.ActiveView);						
+						} 
+						else if(end0 && !end1)
+						{	
+							lvl.HideBubbleInView(DatumEnds.End0,doc.ActiveView);
+						}
+						else if(!end0 && !end1)
+						{							
+							lvl.ShowBubbleInView(DatumEnds.End1,doc.ActiveView);
+						}
+						else
+						{
+							lvl.ShowBubbleInView(DatumEnds.End0,doc.ActiveView);							
+						}
+						t.Commit();
+					}				
+				}
+				while(true);
+			}				
+			catch (Autodesk.Revit.Exceptions.OperationCanceledException exception)
+			{
+				
+			}
+		}
+		public void DeleteId()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			ElementId id =  new ElementId(3553753);
+			using(Transaction t = new Transaction(doc, "Delete ID"))
+			{
+				t.Start();
+				doc.Delete(id);
+				t.Commit();
+			}
+		}
+		public void SelectGroupByMember()
+		{
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = this.ActiveUIDocument.Document;			
+			
+			Element member = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select Viewport to Renumber")) as Element;
+			
+			if(member.GroupId.IntegerValue > 0)
+			{
+				List<ElementId> groupId = new List<ElementId>(){member.GroupId};
+				uidoc.Selection.SetElementIds(groupId);
+			}			
+		}
+		public void RenumberViewports()
+		{
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = this.ActiveUIDocument.Document;
+			
+			ViewSheet vsheet = doc.ActiveView as ViewSheet;
+			
+			if(vsheet == null) return;
+			
+			var vportsElementIds = vsheet.GetAllViewports();
+			List<Viewport> vports = new List<Viewport>();
+			
+			foreach(var vpId in vportsElementIds)
+			{
+				vports.Add(doc.GetElement(vpId) as Viewport);
+			}
+			int counter = 0;
+			
+			try{				
+				do
+				{
+					counter++;
+					Viewport vp = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select Viewport to Renumber")) as Viewport;
+					if(vp == null) return;
+					Parameter vp_detailnumber = vp.LookupParameter("Detail Number");
+									
+					using(Transaction t = new Transaction(doc, "toggle"))
+					{
+						t.Start();
+						var vp_change = vports.Where(x => x.LookupParameter("Detail Number").AsString() == counter.ToString());
+						string carry = vp_detailnumber.AsString();
+						vp_detailnumber.Set("99");
+						if(vp_change != null && vp_change.Count() > 0) vp_change.First().LookupParameter("Detail Number").Set(carry);
+						vp_detailnumber.Set(counter.ToString());
+						t.Commit();
+					}				
+				}
+				while(true);
+			}			
+			catch (Autodesk.Revit.Exceptions.OperationCanceledException exception)
+			{
+				
+			}
+		}
+		public void FilterSelect()
+		{
+			UIDocument uidoc = ActiveUIDocument;
+			Document doc = uidoc.Document;
+						
+			Reference refer = uidoc.Selection.PickObject(ObjectType.Element, "Set the filter"); //Pick an object by which Category you will filter
+			
+			IList<Element> elements = uidoc.Selection.PickElementsByRectangle();
+						
+			uidoc.Selection.SetElementIds(elements
+				.Where(x => x.Category.Id.IntegerValue.Equals(doc.GetElement(refer).Category.Id.IntegerValue))
+				.Select(x => x.Id)
+				.ToList());
+		}
+		public void AssignViewType()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			
+			List<ViewSheet> sheets = new FilteredElementCollector(doc)
+				.OfClass(typeof(ViewSheet))
+				.Cast<ViewSheet>()
+				.Where(x => x.LookupParameter("Planart").HasValue 
+				       && x.LookupParameter("Planart").AsString().Contains("70-Leitdetails"))
+				.ToList();
+			
+			var vpp = new FilteredElementCollector(doc).OfClass(typeof(Viewport))
+				.Cast<Viewport>()
+				.Where(x => x.Name.Equals("Detail Section - Titlebar BIG")).First();
+						
+			using(Transaction t = new Transaction(doc, "changenames"))
+			{
+				t.Start();
+				foreach(ViewSheet vs in sheets)
+				{
+					var viewports = vs.GetAllViewports();
+					if(viewports.Count > 0)
+					{
+						foreach(ElementId vId in viewports)
+						{
+							Viewport vp = doc.GetElement(vId) as Viewport;
+							vp.get_Parameter(BuiltInParameter.ELEM_FAMILY_AND_TYPE_PARAM).Set(vpp.GetTypeId());
+						}
+					}
+				}				
+				t.Commit();
+			}
+		}
+		
+		public void AlignViews()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			Selection sel = this.ActiveUIDocument.Selection;
+			
+			Viewport vp = doc.GetElement(sel.PickObject(ObjectType.Element, "Pick View to Align To")) as Viewport;
+			
+			if(vp == null) 
+			{
+				TaskDialog.Show("Error", "That's not a View");
+				return;
+			}
+						
+			
+				
+			XYZ loc = vp.GetBoxCenter();
+			
+			List<ViewSheet> viewSheets = new FilteredElementCollector(doc)
+				.OfClass(typeof(ViewSheet))
+				.WhereElementIsNotElementType()
+				.Cast<ViewSheet>()
+				.ToList();
+			
+			List<Viewport> viewPorts = new List<Viewport>();
+			
+			foreach(ViewSheet sheet in viewSheets)
+			{
+				List<Viewport> ports = sheet.GetAllViewports()
+					.Select<ElementId, Viewport>(
+						id => doc.GetElement(id) as Viewport)
+					.ToList<Viewport>();
+				
+				viewPorts.AddRange(ports);
+			}
+			
+			viewPorts = viewPorts.Where(x => x.LookupParameter("View Name").AsString().Contains("DS -")).ToList();
+			
+			
+			
+			using(Transaction t = new Transaction(doc, "Align Views"))
+			{
+				t.Start();
+				foreach(Viewport v in viewPorts)
+				{
+					if(v.Id == vp.Id) continue;
+					XYZ delta = loc - v.GetBoxCenter();
+					ElementTransformUtils.MoveElement(doc, v.Id, delta);
+				}
+				t.Commit();
+			}
+		}
+		#endregion
+			
+	public void CollectElementIDs()
+	{
+	    UIDocument uidoc = ActiveUIDocument;
             Document doc = ActiveUIDocument.Document;
             
             View current = doc.ActiveView;
