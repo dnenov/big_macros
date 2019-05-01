@@ -365,6 +365,61 @@ namespace BIG_Macros
 				uidoc.Selection.SetElementIds(groupId);
 			}			
 		}
+		public void ExportDetails()
+		{
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = this.ActiveUIDocument.Document;
+			
+			var details = new FilteredElementCollector(doc)
+				.OfCategory(BuiltInCategory.OST_DetailComponents)
+				.OfClass(typeof(FamilySymbol))
+				.Cast<FamilySymbol>()
+				.ToList();
+						
+			string path = "";
+			
+			using(var fbd = new FolderBrowserDialog())
+			{
+				var result = fbd.ShowDialog();
+				
+				if(result == DialogResult.OK)
+				{
+					path = fbd.SelectedPath;		
+				}
+			}							
+			
+			if (string.IsNullOrWhiteSpace(path)) return;
+			
+			foreach(var detail in details)
+			{
+				try{
+					Family family = detail.Family;
+					if(family == null) continue;
+					Document detailDoc = doc.EditFamily(family);
+					detailDoc.SaveAs(path + "\\" + family.Name + ".rfa");
+					detailDoc.Close(false);						
+				}			
+				catch(Exception){}
+			}
+		}
+		public void ElementTypes()
+		{
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = this.ActiveUIDocument.Document;			
+			
+			var details = new FilteredElementCollector(doc)
+				.OfCategory(BuiltInCategory.OST_DetailComponents)
+				.OfClass(typeof(FamilySymbol))
+				.Cast<FamilySymbol>()
+				.ToList();
+						
+			foreach(var detail in details)
+			{
+				var elType = doc.GetElement(detail.GetTypeId()) as ElementType;
+				System.Drawing.Size imgSize = new System.Drawing.Size( 200, 200 );
+				elType.GetPreviewImage(imgSize);
+			}
+		}
 		public void RenumberViewports()
 		{
 			UIDocument uidoc = this.ActiveUIDocument;
