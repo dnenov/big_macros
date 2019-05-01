@@ -456,7 +456,50 @@ namespace BIG_Macros
 				t.Commit();
 			}
 		}
-		
+		public void RenumberViewports()
+		{
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = this.ActiveUIDocument.Document;
+			
+			ViewSheet vsheet = doc.ActiveView as ViewSheet;
+			
+			if(vsheet == null) return;
+			
+			var vportsElementIds = vsheet.GetAllViewports();
+			List<Viewport> vports = new List<Viewport>();
+			
+			foreach(var vpId in vportsElementIds)
+			{
+				vports.Add(doc.GetElement(vpId) as Viewport);
+			}
+			int counter = 0;
+			
+			try{				
+				do
+				{
+					counter++;
+					Viewport vp = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Select Viewport to Renumber")) as Viewport;
+					if(vp == null) return;
+					Parameter vp_detailnumber = vp.LookupParameter("Detail Number");
+									
+					using(Transaction t = new Transaction(doc, "toggle"))
+					{
+						t.Start();
+						var vp_change = vports.Where(x => x.LookupParameter("Detail Number").AsString() == counter.ToString());
+						string carry = vp_detailnumber.AsString();
+						vp_detailnumber.Set("99");
+						if(vp_change != null && vp_change.Count() > 0) vp_change.First().LookupParameter("Detail Number").Set(carry);
+						vp_detailnumber.Set(counter.ToString());
+						t.Commit();
+					}				
+				}
+				while(true);
+			}			
+			catch (Autodesk.Revit.Exceptions.OperationCanceledException exception)
+			{
+				
+			}
+		}
 		public void AlignViews()
 		{
 			Document doc = this.ActiveUIDocument.Document;
