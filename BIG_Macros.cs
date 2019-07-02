@@ -4508,7 +4508,173 @@ namespace BIG_Macros
       UVArray uva = new UVArray( xyZArray );
       return PolygonContains( uva, TOUV(p1) );
     }
+public void SwapViews()
+		{
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = uidoc.Document;
+			
+			List<Tuple<View, Viewport>> result = new List<Tuple<View, Viewport>>();
+			
+			string level = "Ground Floor Plan";
+			
+			var views = new FilteredElementCollector(doc)
+				.OfClass(typeof(View))
+				.WhereElementIsNotElementType()
+				.Cast<View>()
+				.Where(v => v.LookupParameter("ViewSubgroup") != null
+				       && v.LookupParameter("ViewSubgroup").HasValue
+				       && v.LookupParameter("ViewSubgroup").AsString().Contains("20_100"))
+				.Where(v => v.Name.Contains(level))
+				.ToList();
+			
+//			RenameBack(doc, views);
+//			return;
+			
+			var viewSheets = new FilteredElementCollector(doc)
+				.OfClass(typeof(ViewSheet))	
+				.Cast<ViewSheet>()
+				.Where(v => v.Name.Contains(level))
+				.ToList();
+			
+			var master = views.First(v => v.Name.Contains("Master"));				
+			var viewsToDuplicate = views.Except(new List<View>{master});
+			
+			viewsToDuplicate = new List<View> {viewsToDuplicate.First(v => v.Name.Equals("Block D Ground Floor Plan - Core D1 South"))};
+									
+			RenameOldViews(doc, viewsToDuplicate);
+			
+			using(Transaction t = new Transaction(doc, "Swap Views"))
+			{
+				t.Start();
+				foreach(var v in viewsToDuplicate)
+				{
+					var sheet = GetSheetViewFromViewandSheet(doc, viewSheets, v);
+					if(sheet != null)
+					{
+						var target = SwapView(doc, master, sheet, v);	
+						PropagateGrids(doc, v, target.Item1);
+						CopyDetailedItem(doc, v, master);
+						result.Add(target);
+					}
+				}
+				t.Commit();
+			}	
+			AlignViews(doc, result);
+		}		
+		private void CopyDetailedItem(Document doc, View source, View target)
+		{
+			List<BuiltInCategory> builtInCats = new List<BuiltInCategory>();
+			builtInCats.Add(BuiltInCategory.OST_Dimensions);
+			builtInCats.Add(BuiltInCategory.OST_TextNotes);
+			builtInCats.Add(BuiltInCategory.OST_AreaTags);
+			 
+			ElementMulticategoryFilter filter = new ElementMulticategoryFilter(builtInCats);
+			
+			var elements = new FilteredElementCollector(doc, source.Id)
+				.WherePasses(filter)
+				.ToElementIds();
+			
+			ElementTransformUtils.CopyElements(source, elements,target,null, new CopyPasteOptions());
+		}
+		private void AlignViews(Document doc, List<Tuple<View, Viewport>> views)
+		{
+			using(Transaction t = new Transaction(doc, "Align Views"))
+			{
+				t.Start();
+				foreach(var v in views)
+				{					
+					XYZ loc_old = new XYZ(1.2,1,0);
+					XYZ loc_new = (v.Item2.GetBoxOutline().MinimumPoint + v.Item2.GetBoxOutline().MaximumPoint) / 2;
+					XYZ delta = loc_old - loc_new;
+					ElementTransformUtils.MoveElement(doc, v.Item2.Id, delta);
+				}
+				t.Commit();
+			}
+		}
+		private ViewSheet GetSheetViewFromViewandSheet(Document doc, List<ViewSheet> viewSheets, View view)
+		{
+			var sheet = viewSheets.First(vs => vs.GetAllPlacedViews().Any(v => doc.GetElement(v).Name.Equals(view.Name)));
+			
+			return sheet;
+		}
+		private void PropagateGrids(Document doc, View source, View target)
+		{
+			var grids = new FilteredElementCollector(doc, source.Id)
+				.OfCategory(BuiltInCategory.OST_Grids)
+				.Cast<Grid>()
+				.ToList();
+			
+			var scopeBox = 	source.LookupParameter("Scope Box").AsElementId();			
+			
+			source.LookupParameter("Scope Box").Set(new ElementId(-1));
+			source.CropBoxActive = false;			
+			
+			target.LookupParameter("Scope Box").Set(new ElementId(-1));
+			target.CropBoxActive = false;
+			
+			foreach(var g in grids)
+			{
+				g.PropagateToViews(source, new HashSet<ElementId> {target.Id});
+			}
+						
+			target.LookupParameter("Scope Box").Set(scopeBox);
+			target.get_Parameter(BuiltInParameter.VIEWER_ANNOTATION_CROP_ACTIVE).Set(0);
+			target.CropBoxActive = true;
+			target.CropBoxVisible = false;
+		}
+		private Tuple<View, Viewport> SwapView(Document doc, View master, ViewSheet sheet, View view)
+		{
+			var viewport = doc.GetElement(sheet.GetAllViewports().First()) as Viewport;
+			var name = view.Name;
+			var scopeBox = view.LookupParameter("Scope Box").AsElementId();		
+			
+			var type = viewport.GetTypeId();
+			
+			// Duplicate the view as Dependent
+			var swap = doc.GetElement(master.Duplicate(ViewDuplicateOption.AsDependent)) as View;
+			swap.Name = name.Replace("_old","");
+			swap.LookupParameter("Scope Box").Set(scopeBox);
+			swap.CropBoxVisible = false;
+			swap.CropBoxActive = true;
+			swap.get_Parameter(BuiltInParameter.VIEWER_ANNOTATION_CROP_ACTIVE).Set(1);
+			
+			// Create the new Viewport
+			var swappedView = Viewport.Create(doc, sheet.Id, swap.Id, new XYZ(0,0,0));
 
+			// Change the Type of the Viewport			
+			swappedView.ChangeTypeId(type);			
+		
+			// Finally delete the old viewport
+			doc.Delete(viewport.Id);
+
+			return new Tuple<View, Viewport> (swap,swappedView) ;
+		}
+		private void RenameBack(Document doc, IEnumerable<View> viewsToDuplicate)
+		{
+			using(Transaction t = new Transaction(doc, "Rename Old Views"))
+			{
+				t.Start();
+				foreach(var v in viewsToDuplicate)
+				{
+					if(v.Name.Contains("_old"))
+	                   v.Name = v.Name.Replace("_old", "");
+				}
+				t.Commit();
+			}	
+		}
+		private void RenameOldViews(Document doc, IEnumerable<View> viewsToDuplicate)
+		{
+			using(Transaction t = new Transaction(doc, "Rename Old Views"))
+			{
+				t.Start();
+				foreach(var v in viewsToDuplicate)
+				{
+					v.Name += "_old";					
+					v.get_Parameter(BuiltInParameter.VIEWER_ANNOTATION_CROP_ACTIVE).Set(1);
+				}
+				t.Commit();
+			}	
+		}
     /// <summary>
     /// Determine whether given 2D point lies within 
     /// the polygon.
