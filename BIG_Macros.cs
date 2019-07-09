@@ -177,6 +177,35 @@ namespace BIG_Macros
 			}
 			
 		}
+		public void ChangeTypeNames()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+						
+            FamilyManager familyManager = doc.FamilyManager;
+            FamilyTypeSet familyTypes = familyManager.Types;
+	        FamilyTypeSetIterator familyTypesItor = familyTypes.ForwardIterator();
+	        familyTypesItor.Reset();
+	        
+	        string types = "";
+	        
+	        
+			
+	        using(Transaction t = new Transaction(doc, "Change type name"))
+	        {
+	        	t.Start();
+	        	while (familyTypesItor.MoveNext())
+		        {
+		            FamilyType familyType = familyTypesItor.Current as FamilyType;
+		            if(familyType.Name.Contains("Plant"))
+		            {
+		            	familyManager.CurrentType = familyType;
+		            	familyManager.RenameCurrentType(familyType.Name.Replace("Plant", "Plant "));
+		            }
+		        }
+	        	t.Commit();
+	        }
+			TaskDialog.Show("test", types);			
+		}
 		public void SetWorksets()
 		{
 			Document doc = this.ActiveUIDocument.Document;
