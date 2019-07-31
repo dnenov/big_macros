@@ -449,6 +449,92 @@ namespace BIG_Macros
 				elType.GetPreviewImage(imgSize);
 			}
 		}
+		///
+		/// Creates a single dimension string between the chosen Level lines
+		/// 
+		public void DimLevels()
+		{			
+		  UIDocument uidoc = this.ActiveUIDocument;
+		  Document doc = uidoc.Document;
+		
+		  // Pick all the grid lines you want to dimension to
+		  LevelSelectionFilter filter = new ThisApplication.LevelSelectionFilter(doc);			
+		  var levels = uidoc.Selection.PickElementsByRectangle(filter, "Pick Grid Lines");
+		
+		  ReferenceArray refArray = new ReferenceArray();
+		  XYZ dir = null;
+		
+		  foreach(Element el in levels)
+		  {
+		    Level lv = el as Level;
+		
+		    if(lv == null) continue;
+		    refArray.Append(lv.GetPlaneReference());
+		    continue;
+		    /*
+		    if(dir == null)
+		    {
+		    	Curve crv = (Reference)lv;
+		      dir = new XYZ(0,0,1).CrossProduct((crv.GetEndPoint(0) - crv.GetEndPoint(1)));	// Get the direction of the gridline
+		    }
+			*/
+		    Reference gridRef = null;
+		
+		    // Options to extract the reference geometry needed for the NewDimension method
+		    Options opt = new Options();
+		    opt.ComputeReferences = true;
+		    opt.IncludeNonVisibleObjects = true;
+		    opt.View = doc.ActiveView;
+		    foreach (GeometryObject obj in lv.get_Geometry(opt))
+		    {
+		      if (obj is Line)
+		      {
+		        Line l = obj as Line;
+		        gridRef = l.Reference;
+		        refArray.Append(gridRef);	// Append to the list of all reference lines 
+		      }
+		    }
+		  }
+		
+		  XYZ pickPoint = uidoc.Selection.PickPoint();	// Pick a placement point for the dimension line
+		  Line line = Line.CreateBound(pickPoint, pickPoint + XYZ.BasisZ * 100);		// Creates the line to be used for the dimension line
+		
+		  using(Transaction t = new Transaction(doc, "Make Dim"))
+		  {
+		    t.Start();
+		    if( !doc.IsFamilyDocument )
+		    {
+		      doc.Create.NewDimension( 
+		        doc.ActiveView, line, refArray);
+		    }				
+		    t.Commit();
+		  }					
+		}
+		///
+		/// Levels Selection Filter (example for selection filters)
+		/// 
+		public class LevelSelectionFilter : ISelectionFilter
+		{
+		  Document doc = null;
+		  public LevelSelectionFilter(Document document)
+		  {
+		    doc = document;
+		  }
+		
+		  public bool AllowElement(Element element)
+		  {
+		    if(element.Category.Name == "Levels")
+		    {
+		      return true;
+		    }
+		    return false;
+		  }
+		
+		  public bool AllowReference(Reference refer, XYZ point)
+		  {
+		    return true;
+		  }
+		}
 		public void RenumberViewports()
 		{
 			UIDocument uidoc = this.ActiveUIDocument;
