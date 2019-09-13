@@ -626,6 +626,34 @@ namespace BIG_Macros
 				t.Commit();
 			}
 		}
+		public void ReplaceViewport()
+		{
+		  UIDocument uidoc = this.ActiveUIDocument;
+		  Document doc = uidoc.Document;
+		  
+		  var viewport = doc.GetElement(uidoc.Selection.PickObject(ObjectType.Element, "Pick Viewport to replace").ElementId) as Viewport;
+		  var view = doc.GetElement(viewport.ViewId) as View;
+		  
+		  var sheet = viewport.SheetId;
+		  var point = viewport.GetBoxCenter();
+		  
+		  var replacementView = new FilteredElementCollector(doc)
+		  	.OfClass(typeof(View))
+		  	.Cast<View>()
+		  	.Where(v => v.Name.Equals("B1 - General Arrangement"))
+		  	.First();
+		  
+		  var delete = new List<ElementId>();
+		  delete.Add(viewport.Id);
+		  
+		  using(Transaction t = new Transaction(doc, "Replace viewport"))
+		  {
+		  	t.Start();
+		  	Viewport.Create(doc, sheet, replacementView.Id, point);
+		  	doc.Delete(delete);
+		  	t.Commit();
+		  }	  
+		}
 		public void RenumberViewports()
 		{
 			UIDocument uidoc = this.ActiveUIDocument;
