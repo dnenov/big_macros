@@ -450,7 +450,8 @@ namespace BIG_Macros
 			}
 		}
 		///
-		/// Creates a single dimension string between the chosen Level lines
+		/// Creates a single 
+		ension string between the chosen Level lines
 		/// 
 		public void DimLevels()
 		{			
@@ -508,6 +509,75 @@ namespace BIG_Macros
 		        doc.ActiveView, line, refArray);
 		    }				
 		    t.Commit();
+		  }					
+		}
+		/// <summary>
+		/// Create Dimensions of Levels in Section
+		/// </summary>
+		public void DimLevelsSection()
+		{			
+		  UIDocument uidoc = this.ActiveUIDocument;
+		  Document doc = uidoc.Document;
+		
+		  // Pick all the grid lines you want to dimension to
+		  LevelSelectionFilter filter = new ThisApplication.LevelSelectionFilter(doc);			
+		  var levels = uidoc.Selection.PickElementsByRectangle(filter, "Pick Grid Lines");
+		
+		  ReferenceArray refArray = new ReferenceArray();
+		  XYZ dir = null;
+		
+		  foreach(Element el in levels)
+		  {
+		    Level lv = el as Level;
+		
+		    if(lv == null) continue;
+		    refArray.Append(lv.GetPlaneReference());
+		    continue;
+		  }
+				  
+		  try{		  	
+			  using(Transaction tr = new Transaction(doc, "Set workplane"))
+			  {
+			    tr.Start();			    
+			    
+				View view = uidoc.ActiveView;				
+						  	
+				var origin = view.Origin;
+				var direction = view.ViewDirection;
+							  	  
+				Plane plane = Plane.CreateByNormalAndOrigin(direction, origin);
+				SketchPlane sp = SketchPlane.Create(doc, plane);
+				
+				view.SketchPlane = sp;	
+			    doc.Regenerate();		  
+				
+			    tr.Commit();
+			  }
+		  }
+		  catch(Exception ex)
+		  {
+		  	TaskDialog.Show("Error", ex.Message);
+		  }		
+		  
+		  try{		  	
+			  using(Transaction t = new Transaction(doc, "Make Dim"))
+			  {
+			    t.Start();			    
+			    
+				XYZ pickPoint = uidoc.Selection.PickPoint();	// Pick a placement point for the dimension line
+				Line line = Line.CreateBound(pickPoint, pickPoint + XYZ.BasisZ * 100);		// Creates the line to be used for the dimension line
+		  
+			    if( !doc.IsFamilyDocument )
+			    {
+			      doc.Create.NewDimension( 
+			        doc.ActiveView, line , refArray);
+			    }				
+			    t.Commit();
+			  }
+		  }
+		  catch(Exception ex)
+		  {
+		  	TaskDialog.Show("Error", ex.Message);
 		  }					
 		}
 		///
