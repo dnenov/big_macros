@@ -913,7 +913,49 @@ namespace BIG_Macros
                                                            s));
             
             return;
-        }
+        }public void DimRefPlanes()
+		{			
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = uidoc.Document;
+			
+			RefPlanesSelectionFilter filter = new ThisApplication.RefPlanesSelectionFilter(doc);			
+			IList<Element> planes = uidoc.Selection.PickElementsByRectangle(filter, "Pick Ref Plans");
+			
+			ReferenceArray refArray = new ReferenceArray();
+			XYZ dir = null;
+			
+			foreach(Element el in planes)
+			{
+				ReferencePlane gr = el as ReferencePlane;				
+				Plane pl = gr.GetPlane();
+				
+				if(gr == null) continue;
+				if(dir == null)
+				{
+					dir = pl.Normal;
+				}
+				
+				
+				Reference gridRef = null;
+				gridRef = gr.GetReference();
+					
+				refArray.Append(gridRef);
+			}
+			
+			XYZ pickPoint = uidoc.Selection.PickPoint();
+			Line line = Line.CreateBound(pickPoint, pickPoint + dir * 100);
+			
+			using(Transaction t = new Transaction(doc, "Make Dim"))
+			{
+				t.Start();
+				if( !doc.IsFamilyDocument )
+				{
+					doc.Create.NewDimension( 
+					  doc.ActiveView, line, refArray);
+				}				
+				t.Commit();
+			}					
+		}	
         public void CreateWorksetView()
 		{
 			Document doc = this.ActiveUIDocument.Document;
