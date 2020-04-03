@@ -4763,7 +4763,166 @@ namespace BIG_Macros
       UVArray uva = new UVArray( xyZArray );
       return PolygonContains( uva, TOUV(p1) );
     }
-public void SwapViews()
+	    
+	
+		public void WireInstanceParameters()
+		{
+		    UIDocument uidoc = ActiveUIDocument;
+		    Document doc = ActiveUIDocument.Document;
+		    
+		    if(!doc.IsFamilyDocument) return;
+		    
+		    var wireFamily = uidoc.Selection.PickObject(ObjectType.Element, "Pick Object");
+		    var fam = doc.GetElement(wireFamily) as FamilyInstance;
+		    
+		    SortedList<string, FamilyParameter> famParam = new SortedList<string, FamilyParameter>();
+		    FamilyManager familyManager = doc.FamilyManager;
+            FamilyType familyType = familyManager.CurrentType;
+
+            string s = "";
+            
+            foreach (FamilyParameter fp in familyManager.Parameters)
+            {
+            	famParam.Add(fp.Definition.Name, fp);
+            }
+            
+            s += Environment.NewLine;
+            
+        	using(Transaction t = new Transaction(doc, "Wire parameters"))
+        	{
+        		t.Start();
+        		
+	            foreach(Parameter param in fam.Parameters)
+	            {
+        			try{
+		            	s = param.Definition.Name;
+		            	FamilyParameter famParameter = null;
+		            	if(famParam.TryGetValue(param.Definition.Name, out famParameter))
+		        	    {
+//		            		doc.FamilyManager.Set(famParameter, param.Id);
+		            		doc.FamilyManager.AssociateElementParameterToFamilyParameter(param, famParameter);
+		        	    }
+		            	
+		            }
+		            catch(Exception ex)
+		            {
+//		            	TaskDialog.Show("Error", s + " : " +ex.Message);
+		            } 
+       		    }
+        		t.Commit();
+        	}           
+		}		
+		public void WireParameters()
+		{
+		    UIDocument uidoc = ActiveUIDocument;
+		    Document doc = ActiveUIDocument.Document;
+		    
+		    if(!doc.IsFamilyDocument) return;
+		    
+		    var wireFamily = uidoc.Selection.PickObject(ObjectType.Element, "Pick Object");
+		    var fam = doc.GetElement(wireFamily) as FamilyInstance;
+		    
+		    SortedList<string, FamilyParameter> famParam = new SortedList<string, FamilyParameter>();
+		    FamilyManager familyManager = doc.FamilyManager;
+            FamilyType familyType = familyManager.CurrentType;
+
+            string s = "";
+            
+            foreach (FamilyParameter fp in familyManager.Parameters)
+            {
+            	famParam.Add(fp.Definition.Name, fp);
+            }
+            
+            s += Environment.NewLine;
+            
+        	using(Transaction t = new Transaction(doc, "Wire parameters"))
+        	{
+        		t.Start();
+        		
+	            foreach(Parameter param in fam.Symbol.Parameters)
+	            {
+        			try{
+		            	s = param.Definition.Name;
+		            	FamilyParameter famParameter = null;
+		            	if(famParam.TryGetValue(param.Definition.Name, out famParameter))
+		        	    {
+//		            		doc.FamilyManager.Set(famParameter, param.Id);
+		            		doc.FamilyManager.AssociateElementParameterToFamilyParameter(param, famParameter);
+		        	    }
+		            	
+		            }
+		            catch(Exception ex)
+		            {
+//		            	TaskDialog.Show("Error", s + " : " +ex.Message);
+		            } 
+       		    }
+        		t.Commit();
+        	}           
+		}
+		public void PushParameter()
+		{			
+		    UIDocument uidoc = ActiveUIDocument;
+		    Document doc = ActiveUIDocument.Document;
+		    
+		    if(!doc.IsFamilyDocument) return;
+		    
+		    var parameters = doc.FamilyManager.Parameters;
+		    
+		    List<FamilyParameter> famParameters = new List<FamilyParameter>();
+		    FamilyParameter paramToPush = null;
+		    string paramName = "Client";
+		    
+		    foreach(FamilyParameter famParam in parameters)
+		    {
+		    	famParameters.Add(famParam);
+		    	if(famParam.Definition.Name.Equals(paramName)) paramToPush = famParam;
+		    }
+		    
+		    if(paramToPush == null) return; //Couldn't find it
+		    
+		    var selection = uidoc.Selection.PickObject(ObjectType.Element, "Pick family to push to");	//Select a family
+		    var famInstance = doc.GetElement(selection.ElementId) as FamilyInstance;
+		    var family = famInstance.Symbol.Family;	//Get the family from the selection
+		    var famDoc = doc.EditFamily(family);	//Open the family
+		    
+		    // Add the parameter to the family
+		    try{
+		    	using(Transaction ft = new Transaction(famDoc, "Push parameter"))
+				{
+					ft.Start();		    	
+					famDoc.FamilyManager.AddParameter(paramToPush.Definition.Name, 
+					                                  paramToPush.Definition.ParameterGroup,
+					                                  paramToPush.Definition.ParameterType,
+					                                  paramToPush.IsInstance);
+							    	
+					ft.Commit();
+				}
+		    }
+		    catch(Exception){}
+		   	// Load back the family	    
+		    using(Transaction t = new Transaction(famDoc, "Push parameter"))
+		    {
+		    	t.Start();		    	
+		    	family = famDoc.LoadFamily(doc, new FamilyOption());
+		    	t.Commit();
+		    }
+		    // Associate the parameters
+		    using(Transaction tw = new Transaction(doc, "Wire parameters"))
+        	{
+        		tw.Start();    
+    			try{
+	            	var famParameter = famInstance.LookupParameter(paramName);
+            		doc.FamilyManager.AssociateElementParameterToFamilyParameter(famParameter, paramToPush);
+	            }
+	            catch(Exception ex) { } 
+        		tw.Commit();
+        	}   
+		    
+		    TaskDialog.Show("Test", "Done");
+		}
+		    
+	    
+	public void SwapViews()
 		{
 			UIDocument uidoc = this.ActiveUIDocument;
 			Document doc = uidoc.Document;
@@ -4993,4 +5152,24 @@ public void SwapViews()
       // if (angle != 0) return INSIDE; else return OUTSIDE;
     }
   }
+	
+	class FamilyOption : IFamilyLoadOptions
+	{
+		public bool OnFamilyFound(bool familyInUse, out bool overwriteParameterValues)
+		{
+			overwriteParameterValues = true;
+			return true;
+		}
+
+		public bool OnSharedFamilyFound(Family sharedFamily,
+			bool familyInUse,
+			out FamilySource source,
+			out bool overwriteParameterValues )
+		{
+			source = FamilySource.Family;
+			overwriteParameterValues = true;
+			return true;
+		}
+	}
+	
 }
