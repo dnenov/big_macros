@@ -206,6 +206,28 @@ namespace BIG_Macros
 	        }
 			TaskDialog.Show("test", types);			
 		}
+		public void SelectTitleblocks()
+		{
+			var uidoc = this.ActiveUIDocument;
+			var doc = this.ActiveUIDocument.Document;
+			
+			var selection = uidoc.Selection;
+			
+			List<ElementId> titleblocks = new List<ElementId>();
+			
+			if(selection != null)
+			{
+				foreach(var viewSheetId in selection.GetElementIds())
+				{
+					var titleBlockId = new FilteredElementCollector(doc, viewSheetId).OfCategory(BuiltInCategory.OST_TitleBlocks).FirstElementId();
+					
+					if(titleBlockId == null) continue;
+					titleblocks.Add(titleBlockId);
+				}
+			}
+			
+			uidoc.Selection.SetElementIds(titleblocks);
+		}
 		public void SetWorksets()
 		{
 			Document doc = this.ActiveUIDocument.Document;
